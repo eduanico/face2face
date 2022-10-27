@@ -1,0 +1,42 @@
+{
+  "applications": ["face2face"],
+  "changelogDate": "20221027145257",
+  "clientRootFolder": "face2face",
+  "databaseType": "mongodb",
+  "dto": "mapstruct",
+  "embedded": false,
+  "entityTableName": "agent",
+  "fields": [
+    {
+      "fieldName": "name",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "description",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "active",
+      "fieldType": "Boolean"
+    },
+    {
+      "fieldName": "registrationDate",
+      "fieldType": "Instant"
+    }
+  ],
+  "fluentMethods": true,
+  "jpaMetamodelFiltering": false,
+  "microserviceName": "face2face",
+  "name": "Agent",
+  "pagination": "pagination",
+  "readOnly": false,
+  "relationships": [
+    {
+      "otherEntityName": "event",
+      "otherEntityRelationshipName": "agent",
+      "relationshipName": "event",
+      "relationshipType": "one-to-many"
+    }
+  ],
+  "service": "serviceClass"
+}
