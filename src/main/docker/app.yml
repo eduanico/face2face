@@ -12,6 +12,10 @@ services:
       - SPRING_DATA_MONGODB_URI=mongodb://face2face-mongodb:27017/?waitQueueMultiple=1000
       - SPRING_DATA_MONGODB_DATABASE=face2face
       - JHIPSTER_SLEEP=30 # gives time for other services to boot before the application
+    # If you want to expose these ports outside your dev PC,
+    # remove the "127.0.0.1:" prefix
+    ports:
+      - 127.0.0.1:8080:8080
   face2face-mongodb:
     image: mongo:4.4.15
     # If you want to expose these ports outside your dev PC,

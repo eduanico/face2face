@@ -1,7 +1,7 @@
 {
   "generator-jhipster": {
     "applicationIndex": 0,
-    "applicationType": "microservice",
+    "applicationType": "monolith",
     "authenticationType": "jwt",
     "baseName": "face2face",
     "blueprints": [],
@@ -9,6 +9,8 @@
     "cacheProvider": "no",
     "clientFramework": "no",
     "clientPackageManager": "npm",
+    "clientTheme": "none",
+    "clientThemeVariant": "",
     "creationTimestamp": 1666882317488,
     "databaseType": "mongodb",
     "devDatabaseType": "mongodb",
@@ -35,14 +37,14 @@
     "prodDatabaseType": "mongodb",
     "reactive": true,
     "searchEngine": false,
-    "serverPort": "8081",
+    "serverPort": "8080",
     "serviceDiscoveryType": "eureka",
     "skipCheckLengthOfIdentifier": false,
     "skipClient": true,
     "skipFakeData": false,
-    "skipUserManagement": true,
+    "skipUserManagement": false,
     "testFrameworks": [],
     "websocket": false,
-    "withAdminUi": false
+    "withAdminUi": true
   }
 }
