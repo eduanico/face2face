@@ -1,0 +1,40 @@
+application {
+  config {
+    baseName face2face,
+    applicationType microservice,
+    reactive true,
+    databaseType mongodb,
+    packageName com.eclipsoft.face2face,
+    authenticationType jwt,
+    prodDatabaseType mongodb,
+    serviceDiscoveryType eureka,
+    clientFramework no
+  }
+  entities *
+}
+
+entity Agent{
+	name String,
+	description String,
+    active Boolean,
+    registrationDate Instant
+}
+
+entity Event {
+    identification String,
+    dactilar String,
+    validationDate Instant,
+    successful Boolean,
+    eventType EventType
+}
+
+relationship OneToMany {
+    Agent to Event
+}
+
+enum EventType {
+    VALIDATION_SUCCESS, VALIDATION_FAILED
+}
+
+dto * with mapstruct
+paginate * with pagination
