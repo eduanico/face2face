@@ -75,7 +75,7 @@ spring:
         enabled: true
 
 server:
-  port: 8080
+  port: 8081
 
 # ===================================================================
 # JHipster specific properties
@@ -123,4 +123,10 @@ jhipster:
 # https://www.jhipster.tech/common-application-properties/
 # ===================================================================
 
-# application:
+application:
+  integration:
+    check-id:
+      base-url: "https://checkid.eclipsoft.com:8012"
+      username: "hcheck"
+      password: "WCwp#B4!KuAgaE"
+      timeout-in-seconds: 30
