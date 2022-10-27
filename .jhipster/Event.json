@@ -1,0 +1,47 @@
+{
+  "applications": ["face2face"],
+  "changelogDate": "20221027145357",
+  "clientRootFolder": "face2face",
+  "databaseType": "mongodb",
+  "dto": "mapstruct",
+  "embedded": false,
+  "entityTableName": "event",
+  "fields": [
+    {
+      "fieldName": "identification",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "dactilar",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "validationDate",
+      "fieldType": "Instant"
+    },
+    {
+      "fieldName": "successful",
+      "fieldType": "Boolean"
+    },
+    {
+      "fieldName": "eventType",
+      "fieldType": "EventType",
+      "fieldValues": "VALIDATION_SUCCESS,VALIDATION_FAILED"
+    }
+  ],
+  "fluentMethods": true,
+  "jpaMetamodelFiltering": false,
+  "microserviceName": "face2face",
+  "name": "Event",
+  "pagination": "pagination",
+  "readOnly": false,
+  "relationships": [
+    {
+      "otherEntityName": "agent",
+      "otherEntityRelationshipName": "event",
+      "relationshipName": "agent",
+      "relationshipType": "many-to-one"
+    }
+  ],
+  "service": "serviceClass"
+}
