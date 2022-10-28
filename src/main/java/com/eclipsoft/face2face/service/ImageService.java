@@ -7,7 +7,8 @@ import com.eclipsoft.face2face.service.mapper.PersonMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.async.AsyncRequestBody;
 import software.amazon.awssdk.regions.Region;
@@ -17,7 +18,7 @@ import software.amazon.awssdk.services.rekognition.model.*;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
-import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -47,18 +48,20 @@ public class ImageService {
             .map(persona -> {
                 PersonDTO person = personMapper.toDto(persona);
                 return person.getFotografia();
-            }).toFuture().get();
+            }).block();
     }
 
 
-    public boolean uploadAndValidateImages(String id, MultipartFile imageFile, int count) throws IOException {
-        S3AsyncClient client = S3AsyncClient.builder().region(Region.US_EAST_2).build();
+    public boolean uploadAndValidateImages(String id, ByteBuffer imageByteBuffer, int count)  {
+        AwsCredentialsProvider credentialsProvider = ProfileCredentialsProvider.builder().profileName("S3").build();
+
+        S3AsyncClient client = S3AsyncClient.builder().region(Region.US_EAST_2).credentialsProvider(credentialsProvider).build();
 
         PutObjectRequest requestS3 = PutObjectRequest.builder()
             .bucket("pruebas-id4face").key(id+"/evidencia" + count + ".jpg").build();
-        client.putObject(requestS3, AsyncRequestBody.fromBytes(imageFile.getBytes()));
-        if(validateFaceInImage(id, imageFile)) {
-            imageRepository.save(imageFile);
+        client.putObject(requestS3, AsyncRequestBody.fromByteBuffer(imageByteBuffer));
+        if(validateFaceInImage(id, imageByteBuffer)) {
+//            imageRepository.save(imageFile);
             return true;
         }else {
             return false;
@@ -70,13 +73,14 @@ public class ImageService {
         PutObjectRequest requestS3 = PutObjectRequest.builder()
             .bucket("pruebas-id4face").key(id+"/reference.jpg").build();
         byte[] encoded = Base64.getDecoder().decode(reference);
+//        client.putObject(requestS3, AsyncRequestBody.fromBytes(encoded));
         client.putObject(requestS3,
             AsyncRequestBody.fromBytes(encoded)
         );
     }
 
 
-    public boolean validateFaceInImage(String id, MultipartFile imageFile) throws IOException {
+    public boolean validateFaceInImage(String id, ByteBuffer imageByteBuffer) {
         float similarityThreshold = 90F;
 
         Image souImage = Image.builder()
@@ -84,7 +88,7 @@ public class ImageService {
             .build();
 
         Image tarImage = Image.builder()
-            .bytes(SdkBytes.fromByteArray(imageFile.getBytes()))
+            .bytes(SdkBytes.fromByteBuffer(imageByteBuffer))
             .build();
 
         CompareFacesRequest request = CompareFacesRequest.builder()
@@ -94,8 +98,9 @@ public class ImageService {
             .build();
 
         DetectLabelsRequest detectLabelsRequest = DetectLabelsRequest.builder().image(tarImage).build();
+        AwsCredentialsProvider credentialsProvider = ProfileCredentialsProvider.builder().profileName("default").build();
 
-        RekognitionAsyncClient rekognitionClient = RekognitionAsyncClient.builder()
+        RekognitionAsyncClient rekognitionClient = RekognitionAsyncClient.builder().credentialsProvider(credentialsProvider)
             .region(Region.US_EAST_2).build();
 
         try {
@@ -118,6 +123,7 @@ public class ImageService {
 //                }
 //                return true;
 //            }
+            rekognitionClient.close();
             return true;
         }catch(Exception e){
             return false;
