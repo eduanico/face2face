@@ -2,6 +2,7 @@ package com.eclipsoft.face2face.service;
 
 import com.eclipsoft.face2face.Integration.CheckIdClient;
 import com.eclipsoft.face2face.repository.ImageRepository;
+import com.eclipsoft.face2face.service.dto.EventDTO;
 import com.eclipsoft.face2face.service.dto.PersonDTO;
 import com.eclipsoft.face2face.service.mapper.PersonMapper;
 import org.slf4j.Logger;
@@ -19,8 +20,7 @@ import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.nio.ByteBuffer;
-import java.util.Base64;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
@@ -35,11 +35,21 @@ public class ImageService {
 
     private final PersonMapper personMapper;
 
+    private final List<String> LABELS = List.of(
+        "Mobile Phone",
+        "Cell Phone",
+        "Phone",
+        "Electronics"
+    );
 
-    public ImageService(ImageRepository imageRepository, CheckIdClient checkIdClient, PersonMapper personMapper) {
+
+    private final EventService eventService;
+
+    public ImageService(ImageRepository imageRepository, CheckIdClient checkIdClient, PersonMapper personMapper, EventService eventService) {
         this.imageRepository = imageRepository;
         this.checkIdClient = checkIdClient;
         this.personMapper = personMapper;
+        this.eventService = eventService;
     }
 
     public String getReference(String identification, String dactilar) throws ExecutionException, InterruptedException {
@@ -97,25 +107,51 @@ public class ImageService {
             .similarityThreshold(similarityThreshold)
             .build();
 
-        DetectLabelsRequest detectLabelsRequest = DetectLabelsRequest.builder().image(tarImage).build();
+        DetectLabelsRequest detectLabelsRequest = DetectLabelsRequest.builder().minConfidence(80F).image(tarImage).build();
+
         AwsCredentialsProvider credentialsProvider = ProfileCredentialsProvider.builder().profileName("default").build();
+
+//        DetectFacesRequest detectFacesRequest = DetectFacesRequest.builder().image(tarImage).attributes(Attribute.ALL).build();
 
         RekognitionAsyncClient rekognitionClient = RekognitionAsyncClient.builder().credentialsProvider(credentialsProvider)
             .region(Region.US_EAST_2).build();
 
+
+
         try {
-//            CompletableFuture<DetectLabelsResponse> detectLabelsResponse = rekognitionClient.detectLabels(detectLabelsRequest);
-//            List<Label> labels = detectLabelsResponse.labels();
-//            for(Label la : labels) {
+            CompletableFuture<DetectLabelsResponse> detectLabelsResponse = rekognitionClient.detectLabels(detectLabelsRequest);
+            List<Label> labels = detectLabelsResponse.get().labels();
+
+
+//            CompletableFuture<DetectFacesResponse> detectFacesResponse =
+//                rekognitionClient.detectFaces(detectFacesRequest);
+//
+//
+//            log.info(detectFacesResponse.get().toString());
+//            List<FaceDetail> faceDetails = detectFacesResponse.get()
+//                .faceDetails();
+//            for(FaceDetail faceDetail: faceDetails)
+//                log.info(faceDetail.toString());
+            for(Label la : labels) {
+                if(la.instances().size()>=2)
+                    return false;
+//                log.info("\nLas etiquetas son: " + la);
+                if(LABELS.contains(la.name()))
+                    return false;
+
 //                if (la.instances().get(0) != null)
-//                    System.out.printf(String.valueOf(la.instances().get(0)));
-//            }
+//                    log.info("\nLa instancia es : " + String.valueOf(la.instances().get(0)));
+            }
 //            List<Label> labels = detectLabelsResponse.get().labels();
+
             CompletableFuture<CompareFacesResponse> compareFacesResult = rekognitionClient.compareFaces(request);
-            List<CompareFacesMatch> faceDetails = compareFacesResult.get().faceMatches();
-            if(compareFacesResult.get().unmatchedFaces().size() >= 1 ){
+            List<CompareFacesMatch> compareFacesMatches = compareFacesResult.get().faceMatches();
+
+            if(compareFacesResult.get().unmatchedFaces().size() >= 1 || compareFacesMatches.size() >= 2){
                 return false;
             }
+
+
 //            for (CompareFacesMatch match : faceDetails) {
 //                ComparedFace face = match.face();
 //                if (face.confidence() < 90) {
@@ -123,7 +159,7 @@ public class ImageService {
 //                }
 //                return true;
 //            }
-            rekognitionClient.close();
+//            rekognitionClient.close();
             return true;
         }catch(Exception e){
             return false;

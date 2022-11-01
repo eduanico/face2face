@@ -5,6 +5,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 /**
  * Spring Data MongoDB reactive repository for the Agent entity.
@@ -13,4 +14,6 @@ import reactor.core.publisher.Flux;
 @Repository
 public interface AgentRepository extends ReactiveMongoRepository<Agent, String> {
     Flux<Agent> findAllBy(Pageable pageable);
+
+    Mono<Agent> findByName(String name);
 }
