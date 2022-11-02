@@ -116,42 +116,34 @@ public class ImageService {
         RekognitionAsyncClient rekognitionClient = RekognitionAsyncClient.builder().credentialsProvider(credentialsProvider)
             .region(Region.US_EAST_2).build();
 
-
-
         try {
             CompletableFuture<DetectLabelsResponse> detectLabelsResponse = rekognitionClient.detectLabels(detectLabelsRequest);
             List<Label> labels = detectLabelsResponse.get().labels();
 
-
+            CompletableFuture<CompareFacesResponse> compareFacesResult = rekognitionClient.compareFaces(request);
+            List<CompareFacesMatch> compareFacesMatches = compareFacesResult.get().faceMatches();
+            for(Label la : labels) {
+                if(la.instances().size()>=2 || LABELS.contains(la.name()) )
+                    return false;
+//
+            }
+            if(compareFacesResult.get().unmatchedFaces().size() >= 1 || compareFacesMatches.size() >= 2){
+                return false;
+            }
+            return true;
 //            CompletableFuture<DetectFacesResponse> detectFacesResponse =
-//                rekognitionClient.detectFaces(detectFacesRequest);
-//
-//
+//            rekognitionClient.detectFaces(detectFacesRequest);
 //            log.info(detectFacesResponse.get().toString());
 //            List<FaceDetail> faceDetails = detectFacesResponse.get()
 //                .faceDetails();
 //            for(FaceDetail faceDetail: faceDetails)
 //                log.info(faceDetail.toString());
-            for(Label la : labels) {
-                if(la.instances().size()>=2)
-                    return false;
-//                log.info("\nLas etiquetas son: " + la);
-                if(LABELS.contains(la.name()))
-                    return false;
-
+//            log.info("\nLas etiquetas son: " + la);
+//                if(LABELS.contains(la.name()))
+//                    return false;
 //                if (la.instances().get(0) != null)
 //                    log.info("\nLa instancia es : " + String.valueOf(la.instances().get(0)));
-            }
 //            List<Label> labels = detectLabelsResponse.get().labels();
-
-            CompletableFuture<CompareFacesResponse> compareFacesResult = rekognitionClient.compareFaces(request);
-            List<CompareFacesMatch> compareFacesMatches = compareFacesResult.get().faceMatches();
-
-            if(compareFacesResult.get().unmatchedFaces().size() >= 1 || compareFacesMatches.size() >= 2){
-                return false;
-            }
-
-
 //            for (CompareFacesMatch match : faceDetails) {
 //                ComparedFace face = match.face();
 //                if (face.confidence() < 90) {
@@ -160,7 +152,6 @@ public class ImageService {
 //                return true;
 //            }
 //            rekognitionClient.close();
-            return true;
         }catch(Exception e){
             return false;
         }
