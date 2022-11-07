@@ -69,6 +69,7 @@ public class ImageResource {
                 count.getAndIncrement();
                 if (!flag.get()) {
                     eventDTO.setEventType(EventType.VALIDATION_FAILED);
+                    eventDTO.setSuccessful(false);
                     eventService.save(eventDTO).subscribe();
                     log.info("VALIDATION FAILED");
                     return Mono.just(new ResponseEntity(false, HttpStatus.OK));
@@ -77,6 +78,7 @@ public class ImageResource {
         }
         eventDTO.setEventType(EventType.VALIDATION_SUCCESS);
         eventService.save(eventDTO).subscribe();
+        eventDTO.setSuccessful(true);
         log.info("VALIDATION SUCCESS");
         return Mono.just(new ResponseEntity(true, HttpStatus.OK));
     }
