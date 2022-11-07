@@ -2,14 +2,11 @@ package com.eclipsoft.face2face.service;
 
 import com.eclipsoft.face2face.Integration.CheckIdClient;
 import com.eclipsoft.face2face.repository.ImageRepository;
-import com.eclipsoft.face2face.service.dto.EventDTO;
-import com.eclipsoft.face2face.service.dto.PersonDTO;
 import com.eclipsoft.face2face.service.mapper.PersonMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
-import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import reactor.core.publisher.Mono;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.async.AsyncRequestBody;
 import software.amazon.awssdk.regions.Region;
@@ -52,46 +49,32 @@ public class ImageService {
         this.eventService = eventService;
     }
 
-    public String getReference(String identification, String dactilar) throws ExecutionException, InterruptedException {
+    public Mono<String> getReference(String identification, String dactilar) throws ExecutionException, InterruptedException {
         return checkIdClient
-            .findPerson(identification, dactilar)
-            .map(persona -> {
-                PersonDTO person = personMapper.toDto(persona);
-                return person.getFotografia();
-            }).block();
+            .findPerson(identification, dactilar).map(personMapper::toDto)
+            .map(personDTO -> personDTO.getFotografia());
     }
 
 
-    public boolean uploadAndValidateImages(String id, ByteBuffer imageByteBuffer, int count)  {
-        AwsCredentialsProvider credentialsProvider = ProfileCredentialsProvider.builder().profileName("S3").build();
+    public boolean uploadAndValidateImages(String id, ByteBuffer imageByteBuffer, int count, int size)  {
+//        AwsCredentialsProvider credentialsProvider = ProfileCredentialsProvider.builder().profileName("default").build();
+        float similarityThreshold = 90F;
+        float minConfidence = 80F;
+        boolean flag;
 
-        S3AsyncClient client = S3AsyncClient.builder().region(Region.US_EAST_2).credentialsProvider(credentialsProvider).build();
+
+        S3AsyncClient client = S3AsyncClient.builder()
+//            .credentialsProvider(credentialsProvider)
+            .region(Region.US_EAST_2).build();
+
+        RekognitionAsyncClient rekognitionClient = RekognitionAsyncClient.builder()
+//            .credentialsProvider(credentialsProvider)
+            .region(Region.US_EAST_2).build();
 
         PutObjectRequest requestS3 = PutObjectRequest.builder()
             .bucket("pruebas-id4face").key(id+"/evidencia" + count + ".jpg").build();
         client.putObject(requestS3, AsyncRequestBody.fromByteBuffer(imageByteBuffer));
-        if(validateFaceInImage(id, imageByteBuffer)) {
-//            imageRepository.save(imageFile);
-            return true;
-        }else {
-            return false;
-        }
-    }
-
-    public void uploadBase64Image(String id,  String reference){
-        S3AsyncClient client = S3AsyncClient.builder().region(Region.US_EAST_2).build();
-        PutObjectRequest requestS3 = PutObjectRequest.builder()
-            .bucket("pruebas-id4face").key(id+"/reference.jpg").build();
-        byte[] encoded = Base64.getDecoder().decode(reference);
-//        client.putObject(requestS3, AsyncRequestBody.fromBytes(encoded));
-        client.putObject(requestS3,
-            AsyncRequestBody.fromBytes(encoded)
-        );
-    }
-
-
-    public boolean validateFaceInImage(String id, ByteBuffer imageByteBuffer) {
-        float similarityThreshold = 90F;
+        DetectFacesRequest detectFacesRequest = DetectFacesRequest.builder().attributes(Attribute.ALL).build();
 
         Image souImage = Image.builder()
             .s3Object(S3Object.builder().name(id+"/reference.jpg").bucket("pruebas-id4face").build())
@@ -101,57 +84,53 @@ public class ImageService {
             .bytes(SdkBytes.fromByteBuffer(imageByteBuffer))
             .build();
 
+        if(validateLabelsInImage(tarImage, minConfidence, rekognitionClient)) {
+            flag = true;
+            if( count == 1 || count == size)
+                flag = validateFaceInImage(similarityThreshold, souImage, tarImage, rekognitionClient);
+        }else {
+            flag = false;
+        }
+        return flag;
+    }
+
+    public boolean validateLabelsInImage(Image tarImage, float similarityThreshold, RekognitionAsyncClient rekognitionClient){
+        DetectLabelsRequest detectLabelsRequest = DetectLabelsRequest.builder()
+            .minConfidence(similarityThreshold)
+            .image(tarImage)
+            .build();
+
+        try {
+            CompletableFuture<DetectLabelsResponse> detectLabelsResponse = rekognitionClient.detectLabels(detectLabelsRequest);
+            List<Label> labels = detectLabelsResponse.get().labels();
+            for(Label la : labels) {
+                if(la.instances().size()>=2 || LABELS.contains(la.name()) )
+                    return false;
+            }
+            return true;
+        }catch(Exception e){
+            return false;
+        }
+    }
+
+
+    public boolean validateFaceInImage(float similarityThreshold, Image souImage, Image tarImage, RekognitionAsyncClient rekognitionClient) {
         CompareFacesRequest request = CompareFacesRequest.builder()
             .sourceImage(souImage)
             .targetImage(tarImage)
             .similarityThreshold(similarityThreshold)
             .build();
 
-        DetectLabelsRequest detectLabelsRequest = DetectLabelsRequest.builder().minConfidence(80F).image(tarImage).build();
+//        AwsCredentialsProvider credentialsProvider = ProfileCredentialsProvider.builder().profileName("default").build();
 
-        AwsCredentialsProvider credentialsProvider = ProfileCredentialsProvider.builder().profileName("default").build();
-
-//        DetectFacesRequest detectFacesRequest = DetectFacesRequest.builder().image(tarImage).attributes(Attribute.ALL).build();
-
-        RekognitionAsyncClient rekognitionClient = RekognitionAsyncClient.builder().credentialsProvider(credentialsProvider)
-            .region(Region.US_EAST_2).build();
 
         try {
-            CompletableFuture<DetectLabelsResponse> detectLabelsResponse = rekognitionClient.detectLabels(detectLabelsRequest);
-            List<Label> labels = detectLabelsResponse.get().labels();
-
             CompletableFuture<CompareFacesResponse> compareFacesResult = rekognitionClient.compareFaces(request);
             List<CompareFacesMatch> compareFacesMatches = compareFacesResult.get().faceMatches();
-            for(Label la : labels) {
-                if(la.instances().size()>=2 || LABELS.contains(la.name()) )
-                    return false;
-//
-            }
             if(compareFacesResult.get().unmatchedFaces().size() >= 1 || compareFacesMatches.size() >= 2){
                 return false;
             }
             return true;
-//            CompletableFuture<DetectFacesResponse> detectFacesResponse =
-//            rekognitionClient.detectFaces(detectFacesRequest);
-//            log.info(detectFacesResponse.get().toString());
-//            List<FaceDetail> faceDetails = detectFacesResponse.get()
-//                .faceDetails();
-//            for(FaceDetail faceDetail: faceDetails)
-//                log.info(faceDetail.toString());
-//            log.info("\nLas etiquetas son: " + la);
-//                if(LABELS.contains(la.name()))
-//                    return false;
-//                if (la.instances().get(0) != null)
-//                    log.info("\nLa instancia es : " + String.valueOf(la.instances().get(0)));
-//            List<Label> labels = detectLabelsResponse.get().labels();
-//            for (CompareFacesMatch match : faceDetails) {
-//                ComparedFace face = match.face();
-//                if (face.confidence() < 90) {
-//                    return false;
-//                }
-//                return true;
-//            }
-//            rekognitionClient.close();
         }catch(Exception e){
             return false;
         }
@@ -191,10 +170,41 @@ public class ImageService {
                 }
                 return true;
             }
+            //            CompletableFuture<DetectFacesResponse> detectFacesResponse =
+//            rekognitionClient.detectFaces(detectFacesRequest);
+//            log.info(detectFacesResponse.get().toString());
+//            List<FaceDetail> faceDetails = detectFacesResponse.get()
+//                .faceDetails();
+//            for(FaceDetail faceDetail: faceDetails)
+//                log.info(faceDetail.toString());
+//            log.info("\nLas etiquetas son: " + la);
+//                if(LABELS.contains(la.name()))
+//                    return false;
+//                if (la.instances().get(0) != null)
+//                    log.info("\nLa instancia es : " + String.valueOf(la.instances().get(0)));
+//            List<Label> labels = detectLabelsResponse.get().labels();
+//            for (CompareFacesMatch match : faceDetails) {
+//                ComparedFace face = match.face();
+//                if (face.confidence() < 90) {
+//                    return false;
+//                }
+//                return true;
+//            }
+//            rekognitionClient.close();
         }catch(Exception e){
             return false;
         }
         return false;
+    }
+
+    public void uploadBase64Image(String id,  String reference){
+        S3AsyncClient client = S3AsyncClient.builder().region(Region.US_EAST_2)
+//            .credentialsProvider(credentialsProvider)
+            .build();
+        PutObjectRequest requestS3 = PutObjectRequest.builder()
+            .bucket("pruebas-id4face").key(id+"/reference.jpg").build();
+        byte[] encoded = Base64.getDecoder().decode(reference);
+        client.putObject(requestS3, AsyncRequestBody.fromBytes(encoded));
     }
 
 }

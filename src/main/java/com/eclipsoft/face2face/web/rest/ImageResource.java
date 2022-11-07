@@ -65,17 +65,19 @@ public class ImageResource {
         for(FilePart f: list){
             List<DataBuffer> dblist = f.content().collectList().toFuture().get();
             for(DataBuffer d: dblist) {
-                flag.set(imageService.uploadAndValidateImages(id, d.asByteBuffer(), count.get()));
+                flag.set(imageService.uploadAndValidateImages(id, d.asByteBuffer(), count.get(), list.size()));
                 count.getAndIncrement();
                 if (!flag.get()) {
                     eventDTO.setEventType(EventType.VALIDATION_FAILED);
                     eventService.save(eventDTO).subscribe();
+                    log.info("VALIDATION FAILED");
                     return Mono.just(new ResponseEntity(false, HttpStatus.OK));
                 }
             }
         }
         eventDTO.setEventType(EventType.VALIDATION_SUCCESS);
         eventService.save(eventDTO).subscribe();
+        log.info("VALIDATION SUCCESS");
         return Mono.just(new ResponseEntity(true, HttpStatus.OK));
     }
 
@@ -87,7 +89,10 @@ public class ImageResource {
     @PostMapping(value = "/reference", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity uploadReference(@org.springframework.web.bind.annotation.RequestBody RequestVM referenceModel){
         try{
-            imageService.uploadBase64Image(referenceModel.getId(), imageService.getReference(referenceModel.getId(), referenceModel.getDactilar()));
+            imageService.getReference(referenceModel.getId(), referenceModel.getDactilar())
+                .subscribe((foto)-> {
+                    imageService.uploadBase64Image(referenceModel.getId(), foto);
+                });
         }catch (Exception e){System.out.println(e);}
         return new ResponseEntity(HttpStatus.OK);
     }

@@ -7,7 +7,7 @@
 
     <groupId>com.eclipsoft.face2face</groupId>
     <artifactId>face-2-face</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.0.1</version>
     <packaging>jar</packaging>
     <name>Face 2 Face</name>
     <description>Description for face2face</description>
