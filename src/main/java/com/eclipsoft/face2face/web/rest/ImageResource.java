@@ -118,10 +118,10 @@ public class ImageResource {
                             eventDTO.setEventType(EventType.VALIDATION_SUCCESS);
                             eventDTO.setSuccessful(true);
                             log.info("VALIDATION SUCCESS");
-                            eventService.save(eventDTO).subscribe();
                         }
                     }
             }
+            eventService.save(eventDTO).subscribe();
             return Mono.just(new ResponseEntity<>(true,HttpStatus.OK));
         });
     }
