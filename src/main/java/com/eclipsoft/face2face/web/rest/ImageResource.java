@@ -17,6 +17,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
+import software.amazon.awssdk.services.devicefarm.model.Run;
 
 import java.io.*;
 import java.time.Instant;
@@ -55,10 +57,12 @@ public class ImageResource {
     public Mono<ResponseEntity<Boolean>> validateEvidences(@RequestPart("images") Flux<FilePart> images
         , @RequestPart("id") String id, Authentication authentication) throws ExecutionException, InterruptedException {
         EventDTO eventDTO = new EventDTO();
-        eventDTO.setAgent(agentService.findByName(authentication.getName()).toFuture().get());
-        eventDTO.setIdentification(id);
-        eventDTO.setValidationDate(Instant.now());
-
+        agentService.findByName(authentication.getName()).subscribe(
+            agentDTO -> {
+                eventDTO.setAgent(agentDTO);
+                eventDTO.setIdentification(id);
+                eventDTO.setValidationDate(Instant.now());
+            });
         AtomicInteger count = new AtomicInteger(1);
         AtomicBoolean flag = new AtomicBoolean();
         List<FilePart> list = images.collectList().toFuture().get();
@@ -83,9 +87,9 @@ public class ImageResource {
         return Mono.just(new ResponseEntity(true, HttpStatus.OK));
     }
 
-    @PostMapping(value = "/validate-foto")
+    @PostMapping(value = "/validate-photos")
     public Mono<ResponseEntity> validateEvidences2(@RequestPart("images") Flux<FilePart> images
-        , @RequestPart("id") String id, Authentication authentication) {
+        , @RequestPart("id") String id, Authentication authentication) throws ExecutionException, InterruptedException {
         EventDTO eventDTO = new EventDTO();
         agentService.findByName(authentication.getName()).subscribe(
             agentDTO -> {
@@ -106,20 +110,20 @@ public class ImageResource {
                     throw new RuntimeException(e);
                 }
                 for(DataBuffer d: dblist) {
-                        flag.set(imageService.uploadAndValidateImages(id, d.asByteBuffer(), count.get(), list.size()));
-                        count.getAndIncrement();
-                        if (!flag.get()) {
-                            eventDTO.setEventType(EventType.VALIDATION_FAILED);
-                            eventDTO.setSuccessful(false);
-                            log.info("VALIDATION FAILED");
-                            eventService.save(eventDTO).subscribe();
-                            return Mono.just(new ResponseEntity(false,HttpStatus.OK));
-                        } else {
-                            eventDTO.setEventType(EventType.VALIDATION_SUCCESS);
-                            eventDTO.setSuccessful(true);
-                            log.info("VALIDATION SUCCESS");
-                        }
+                    flag.set(imageService.uploadAndValidateImages(id, d.asByteBuffer(), count.get(), list.size()));
+                    count.getAndIncrement();
+                    if (!flag.get()) {
+                        eventDTO.setEventType(EventType.VALIDATION_FAILED);
+                        eventDTO.setSuccessful(false);
+                        log.info("VALIDATION FAILED");
+                        eventService.save(eventDTO).subscribe();
+                        return Mono.just(new ResponseEntity(false,HttpStatus.OK));
+                    } else {
+                        eventDTO.setEventType(EventType.VALIDATION_SUCCESS);
+                        eventDTO.setSuccessful(true);
+                        log.info("VALIDATION SUCCESS");
                     }
+                }
             }
             eventService.save(eventDTO).subscribe();
             return Mono.just(new ResponseEntity<>(true,HttpStatus.OK));
