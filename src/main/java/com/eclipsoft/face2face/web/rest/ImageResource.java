@@ -77,10 +77,53 @@ public class ImageResource {
             }
         }
         eventDTO.setEventType(EventType.VALIDATION_SUCCESS);
-        eventService.save(eventDTO).subscribe();
         eventDTO.setSuccessful(true);
+        eventService.save(eventDTO).subscribe();
         log.info("VALIDATION SUCCESS");
         return Mono.just(new ResponseEntity(true, HttpStatus.OK));
+    }
+
+    @PostMapping(value = "/validate-foto")
+    public Mono<ResponseEntity> validateEvidences2(@RequestPart("images") Flux<FilePart> images
+        , @RequestPart("id") String id, Authentication authentication) {
+        EventDTO eventDTO = new EventDTO();
+        agentService.findByName(authentication.getName()).subscribe(
+            agentDTO -> {
+                eventDTO.setAgent(agentDTO);
+                eventDTO.setIdentification(id);
+                eventDTO.setValidationDate(Instant.now());
+            });
+        AtomicInteger count = new AtomicInteger(1);
+        AtomicBoolean flag = new AtomicBoolean();
+        return images.collectList().flatMap(list -> {
+            for(FilePart f: list){
+                List<DataBuffer> dblist = null;
+                try {
+                    dblist = f.content().collectList().toFuture().get();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                } catch (ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
+                for(DataBuffer d: dblist) {
+                        flag.set(imageService.uploadAndValidateImages(id, d.asByteBuffer(), count.get(), list.size()));
+                        count.getAndIncrement();
+                        if (!flag.get()) {
+                            eventDTO.setEventType(EventType.VALIDATION_FAILED);
+                            eventDTO.setSuccessful(false);
+                            log.info("VALIDATION FAILED");
+                            eventService.save(eventDTO).subscribe();
+                            return Mono.just(new ResponseEntity(false,HttpStatus.OK));
+                        } else {
+                            eventDTO.setEventType(EventType.VALIDATION_SUCCESS);
+                            eventDTO.setSuccessful(true);
+                            log.info("VALIDATION SUCCESS");
+                            eventService.save(eventDTO).subscribe();
+                        }
+                    }
+            }
+            return Mono.just(new ResponseEntity<>(true,HttpStatus.OK));
+        });
     }
 
     /**
@@ -92,10 +135,10 @@ public class ImageResource {
     public ResponseEntity uploadReference(@org.springframework.web.bind.annotation.RequestBody RequestVM referenceModel){
         try{
             imageService.getReference(referenceModel.getId(), referenceModel.getDactilar())
-                .subscribe((foto)-> {
-                    imageService.uploadBase64Image(referenceModel.getId(), foto);
+                .subscribe((photo)-> {
+                    imageService.uploadBase64Image(referenceModel.getId(), photo);
                 });
-        }catch (Exception e){System.out.println(e);}
+        }catch (Exception e){log.error(e.getMessage());}
         return new ResponseEntity(HttpStatus.OK);
     }
 

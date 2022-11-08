@@ -7,6 +7,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.async.AsyncRequestBody;
 import software.amazon.awssdk.regions.Region;
@@ -57,24 +59,23 @@ public class ImageService {
 
 
     public boolean uploadAndValidateImages(String id, ByteBuffer imageByteBuffer, int count, int size)  {
-//        AwsCredentialsProvider credentialsProvider = ProfileCredentialsProvider.builder().profileName("default").build();
+        AwsCredentialsProvider credentialsProvider = ProfileCredentialsProvider.builder().profileName("default").build();
         float similarityThreshold = 90F;
         float minConfidence = 80F;
         boolean flag;
 
 
         S3AsyncClient client = S3AsyncClient.builder()
-//            .credentialsProvider(credentialsProvider)
+            .credentialsProvider(credentialsProvider)
             .region(Region.US_EAST_2).build();
 
         RekognitionAsyncClient rekognitionClient = RekognitionAsyncClient.builder()
-//            .credentialsProvider(credentialsProvider)
+            .credentialsProvider(credentialsProvider)
             .region(Region.US_EAST_2).build();
 
         PutObjectRequest requestS3 = PutObjectRequest.builder()
             .bucket("pruebas-id4face").key(id+"/evidencia" + count + ".jpg").build();
         client.putObject(requestS3, AsyncRequestBody.fromByteBuffer(imageByteBuffer));
-        DetectFacesRequest detectFacesRequest = DetectFacesRequest.builder().attributes(Attribute.ALL).build();
 
         Image souImage = Image.builder()
             .s3Object(S3Object.builder().name(id+"/reference.jpg").bucket("pruebas-id4face").build())
