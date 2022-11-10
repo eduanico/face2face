@@ -28,8 +28,6 @@ public class ImageService {
 
     private final Logger log = LoggerFactory.getLogger(ImageService.class);
 
-    private final ImageRepository imageRepository;
-
     private final CheckIdClient checkIdClient;
 
     private final PersonMapper personMapper;
@@ -41,17 +39,12 @@ public class ImageService {
         "Electronics"
     );
 
-
-    private final EventService eventService;
-
-    public ImageService(ImageRepository imageRepository, CheckIdClient checkIdClient, PersonMapper personMapper, EventService eventService) {
-        this.imageRepository = imageRepository;
+    public ImageService(CheckIdClient checkIdClient, PersonMapper personMapper) {
         this.checkIdClient = checkIdClient;
         this.personMapper = personMapper;
-        this.eventService = eventService;
     }
 
-    public Mono<String> getReference(String identification, String dactilar) throws ExecutionException, InterruptedException {
+    public Mono<String> getReference(String identification, String dactilar) {
         return checkIdClient
             .findPerson(identification, dactilar).map(personMapper::toDto)
             .map(personDTO -> personDTO.getFotografia());
@@ -59,18 +52,18 @@ public class ImageService {
 
 
     public boolean uploadAndValidateImages(String id, ByteBuffer imageByteBuffer, int count, int size)  {
-        AwsCredentialsProvider credentialsProvider = ProfileCredentialsProvider.builder().profileName("default").build();
+//        AwsCredentialsProvider credentialsProvider = ProfileCredentialsProvider.builder().profileName("default").build();
         float similarityThreshold = 90F;
         float minConfidence = 80F;
         boolean flag;
 
 
         S3AsyncClient client = S3AsyncClient.builder()
-            .credentialsProvider(credentialsProvider)
+//            .credentialsProvider(credentialsProvider)
             .region(Region.US_EAST_2).build();
 
         RekognitionAsyncClient rekognitionClient = RekognitionAsyncClient.builder()
-            .credentialsProvider(credentialsProvider)
+//            .credentialsProvider(credentialsProvider)
             .region(Region.US_EAST_2).build();
 
         PutObjectRequest requestS3 = PutObjectRequest.builder()
@@ -105,7 +98,7 @@ public class ImageService {
             CompletableFuture<DetectLabelsResponse> detectLabelsResponse = rekognitionClient.detectLabels(detectLabelsRequest);
             List<Label> labels = detectLabelsResponse.get().labels();
             for(Label la : labels) {
-                if(la.instances().size()>=2 || LABELS.contains(la.name()) )
+                if(LABELS.contains(la.name()))
                     return false;
             }
             return true;
@@ -122,14 +115,23 @@ public class ImageService {
             .similarityThreshold(similarityThreshold)
             .build();
 
-//        AwsCredentialsProvider credentialsProvider = ProfileCredentialsProvider.builder().profileName("default").build();
-
-
         try {
             CompletableFuture<CompareFacesResponse> compareFacesResult = rekognitionClient.compareFaces(request);
             List<CompareFacesMatch> compareFacesMatches = compareFacesResult.get().faceMatches();
-            if(compareFacesResult.get().unmatchedFaces().size() >= 1 || compareFacesMatches.size() >= 2){
+            if( compareFacesMatches.size() >= 2){
                 return false;
+            }
+
+            for(CompareFacesMatch faceMatch: compareFacesMatches){
+                BoundingBox faceBoundingBox = faceMatch.face().boundingBox();
+                float top = faceBoundingBox.top();
+                float width = faceBoundingBox.width();
+                float left = faceBoundingBox.left();
+                float height = faceBoundingBox.height();
+                if(!((top >= 0.2 && top <= 0.4) && (width >= 0.15 && width <= 0.3) &&
+                    (left >= 0.35 && left <= 0.45) && (height >= 0.40 && height <= 0.50))){
+                    return false;
+                }
             }
             return true;
         }catch(Exception e){

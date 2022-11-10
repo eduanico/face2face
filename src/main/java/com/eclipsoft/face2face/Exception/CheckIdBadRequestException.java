@@ -6,7 +6,7 @@ public class CheckIdBadRequestException extends EsignRuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    private static final Status defaultHttpStatus = Status.BAD_REQUEST;
+    private static final Status defaultHttpStatus = Status.OK;
 
     private static final String defaultErrorCode = ErrorConstants.CHECKID_BAD_REQUEST;
 

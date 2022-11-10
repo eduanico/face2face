@@ -6,7 +6,7 @@ public class CheckIdIntegrationException extends EsignRuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    private static final Status defaultHttpStatus = Status.INTERNAL_SERVER_ERROR;
+    private static final Status defaultHttpStatus = Status.OK;
 
     private static final String defaultErrorCode = ErrorConstants.CHECKID_INTEGRATION_FAIL;
 

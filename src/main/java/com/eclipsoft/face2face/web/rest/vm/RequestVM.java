@@ -1,10 +1,18 @@
 package com.eclipsoft.face2face.web.rest.vm;
 
 
+import javax.validation.constraints.NotEmpty;
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
+
 public class RequestVM {
 
+    @NotNull
+    @NotEmpty
+    @Size(max = 10, min = 10)
     String id;
 
+    @Size(min = 6, max = 6)
     String dactilar;
 
     String image;

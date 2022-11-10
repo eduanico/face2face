@@ -1,5 +1,6 @@
 package com.eclipsoft.face2face.web.rest;
 
+import com.eclipsoft.face2face.Integration.CheckIdClient;
 import com.eclipsoft.face2face.domain.enumeration.EventType;
 import com.eclipsoft.face2face.service.AgentService;
 import com.eclipsoft.face2face.service.EventService;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import javax.validation.Valid;
 import java.io.*;
 import java.time.Instant;
 import java.util.List;
@@ -37,10 +39,13 @@ public class ImageResource {
 
     private final EventService eventService;
 
-    public ImageResource(ImageService imageService, AgentService agentService, EventService eventService) {
+    private final CheckIdClient checkIdClient;
+
+    public ImageResource(ImageService imageService, AgentService agentService, EventService eventService, CheckIdClient checkIdClient) {
         this.imageService = imageService;
         this.agentService = agentService;
         this.eventService = eventService;
+        this.checkIdClient = checkIdClient;
     }
 
     /**
@@ -87,7 +92,7 @@ public class ImageResource {
 
     @PostMapping(value = "/validate-photos")
     public Mono<ResponseEntity> validateEvidences2(@RequestPart("images") Flux<FilePart> images
-        , @RequestPart("id") String id, Authentication authentication) throws ExecutionException, InterruptedException {
+        , @RequestPart("id") String id, Authentication authentication) {
         EventDTO eventDTO = new EventDTO();
         agentService.findByName(authentication.getName()).subscribe(
             agentDTO -> {
@@ -116,13 +121,12 @@ public class ImageResource {
                         log.info("VALIDATION FAILED");
                         eventService.save(eventDTO).subscribe();
                         return Mono.just(new ResponseEntity(false,HttpStatus.OK));
-                    } else {
-                        eventDTO.setEventType(EventType.VALIDATION_SUCCESS);
-                        eventDTO.setSuccessful(true);
-                        log.info("VALIDATION SUCCESS");
                     }
                 }
             }
+            eventDTO.setEventType(EventType.VALIDATION_SUCCESS);
+            eventDTO.setSuccessful(true);
+            log.info("VALIDATION SUCCESS");
             eventService.save(eventDTO).subscribe();
             return Mono.just(new ResponseEntity<>(true,HttpStatus.OK));
         });
@@ -130,18 +134,19 @@ public class ImageResource {
 
     /**
      * Fetch the image in base64 from RCE
+     *
      * @param referenceModel
      * @return
      */
     @PostMapping(value = "/reference", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity uploadReference(@org.springframework.web.bind.annotation.RequestBody RequestVM referenceModel){
-        try{
-            imageService.getReference(referenceModel.getId(), referenceModel.getDactilar())
-                .subscribe((photo)-> {
-                    imageService.uploadBase64Image(referenceModel.getId(), photo);
-                });
-        }catch (Exception e){log.error(e.getMessage());}
-        return new ResponseEntity(HttpStatus.OK);
+    public Mono<ResponseEntity<Object>> uploadReference(@Valid @RequestBody RequestVM referenceModel){
+
+        return checkIdClient.findPerson(referenceModel.getId(), referenceModel.getDactilar())
+                .flatMap(person-> {
+                    imageService.uploadBase64Image(referenceModel.getId(), (String) person.get("fotografia"));
+                    return Mono.just(ResponseEntity.ok().build());
+                })
+            .doOnError(throwable -> Mono.just(ResponseEntity.badRequest().body(throwable.getMessage())));
     }
 
     /**
@@ -152,11 +157,11 @@ public class ImageResource {
     @PostMapping(value = "/reference-image", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity uploadReferenceImage(@org.springframework.web.bind.annotation.RequestBody RequestVM referenceModel){
         imageService.uploadBase64Image(referenceModel.getId(), referenceModel.getImage());
-        return new ResponseEntity(HttpStatus.OK);
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping(value = "/principalName")
     public ResponseEntity test(Authentication authentication) throws ExecutionException, InterruptedException {
-        return new ResponseEntity(authentication.getName(),HttpStatus.OK);
+        return ResponseEntity.ok(authentication.getName());
     }
 }
