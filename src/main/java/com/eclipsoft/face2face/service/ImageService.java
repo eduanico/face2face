@@ -118,7 +118,7 @@ public class ImageService {
         try {
             CompletableFuture<CompareFacesResponse> compareFacesResult = rekognitionClient.compareFaces(request);
             List<CompareFacesMatch> compareFacesMatches = compareFacesResult.get().faceMatches();
-            if( compareFacesMatches.size() >= 2){
+            if( compareFacesMatches.size() >= 2 || compareFacesMatches.size() == 0){
                 return false;
             }
 
