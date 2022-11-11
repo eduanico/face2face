@@ -57,20 +57,23 @@ public class ImageResource {
      * @throws IOException
      */
     @PostMapping(value = "/validate")
-    public Mono<ResponseEntity<Boolean>> validateEvidences(@RequestPart("images") Flux<FilePart> images
+    public Mono<ResponseEntity> validateEvidences(@RequestPart("images") Flux<FilePart> images
         , @RequestPart("id") String id, Authentication authentication) throws ExecutionException, InterruptedException {
         EventDTO eventDTO = new EventDTO();
+        AtomicInteger count = new AtomicInteger(1);
+        AtomicBoolean flag = new AtomicBoolean();
+
         agentService.findByName(authentication.getName()).subscribe(
             agentDTO -> {
                 eventDTO.setAgent(agentDTO);
                 eventDTO.setIdentification(id);
                 eventDTO.setValidationDate(Instant.now());
             });
-        AtomicInteger count = new AtomicInteger(1);
-        AtomicBoolean flag = new AtomicBoolean();
+
         List<FilePart> list = images.collectList().toFuture().get();
-        for(FilePart f: list){
-            List<DataBuffer> dblist = f.content().collectList().toFuture().get();
+        for(FilePart filePart: list){
+            List<DataBuffer> dblist = filePart.content().collectList().toFuture().get();
+
             for(DataBuffer d: dblist) {
                 flag.set(imageService.uploadAndValidateImages(id, d.asByteBuffer(), count.get(), list.size()));
                 count.getAndIncrement();

@@ -1,7 +1,6 @@
 package com.eclipsoft.face2face.service;
 
 import com.eclipsoft.face2face.Integration.CheckIdClient;
-import com.eclipsoft.face2face.repository.ImageRepository;
 import com.eclipsoft.face2face.service.mapper.PersonMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,7 +20,6 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 @Service
 public class ImageService {
@@ -93,15 +91,8 @@ public class ImageService {
             .minConfidence(similarityThreshold)
             .image(tarImage)
             .build();
-
         try {
-            CompletableFuture<DetectLabelsResponse> detectLabelsResponse = rekognitionClient.detectLabels(detectLabelsRequest);
-            List<Label> labels = detectLabelsResponse.get().labels();
-            for(Label la : labels) {
-                if(LABELS.contains(la.name()))
-                    return false;
-            }
-            return true;
+            return !rekognitionClient.detectLabels(detectLabelsRequest).get().labels().stream().anyMatch(LABELS::contains);
         }catch(Exception e){
             return false;
         }
@@ -121,18 +112,14 @@ public class ImageService {
             if( compareFacesMatches.size() >= 2 || compareFacesMatches.size() == 0){
                 return false;
             }
-
-            for(CompareFacesMatch faceMatch: compareFacesMatches){
-                BoundingBox faceBoundingBox = faceMatch.face().boundingBox();
-                float top = faceBoundingBox.top();
-                float width = faceBoundingBox.width();
-                float left = faceBoundingBox.left();
-                float height = faceBoundingBox.height();
-                if(!((top >= 0.2 && top <= 0.4) && (width >= 0.15 && width <= 0.3) &&
-                    (left >= 0.35 && left <= 0.45) && (height >= 0.40 && height <= 0.50))){
-                    return false;
-                }
-            }
+            BoundingBox faceBoundingBox = compareFacesMatches.get(0).face().boundingBox();
+            float top = faceBoundingBox.top();
+            float width = faceBoundingBox.width();
+            float left = faceBoundingBox.left();
+            float height = faceBoundingBox.height();
+            if(!((top >= 0.2 && top <= 0.4) && (width >= 0.15 && width <= 0.3) &&
+                (left >= 0.35 && left <= 0.45) && (height >= 0.40 && height <= 0.50)))
+                return false;
             return true;
         }catch(Exception e){
             return false;
