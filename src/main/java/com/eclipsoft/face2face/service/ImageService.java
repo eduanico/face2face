@@ -34,7 +34,9 @@ public class ImageService {
         "Mobile Phone",
         "Cell Phone",
         "Phone",
-        "Electronics"
+        "Electronics",
+        "Poster",
+        "Advertisement"
     );
 
     public ImageService(CheckIdClient checkIdClient, PersonMapper personMapper) {
@@ -52,7 +54,7 @@ public class ImageService {
     public boolean uploadAndValidateImages(String id, ByteBuffer imageByteBuffer, int count, int size)  {
 //        AwsCredentialsProvider credentialsProvider = ProfileCredentialsProvider.builder().profileName("default").build();
         float similarityThreshold = 90F;
-        float minConfidence = 80F;
+        float minConfidence = 55F;
         boolean flag;
 
 
@@ -86,13 +88,18 @@ public class ImageService {
         return flag;
     }
 
-    public boolean validateLabelsInImage(Image tarImage, float similarityThreshold, RekognitionAsyncClient rekognitionClient){
+    public boolean validateLabelsInImage(Image tarImage, float minConfidence, RekognitionAsyncClient rekognitionClient){
         DetectLabelsRequest detectLabelsRequest = DetectLabelsRequest.builder()
-            .minConfidence(similarityThreshold)
+            .minConfidence(minConfidence)
             .image(tarImage)
             .build();
         try {
-            return !rekognitionClient.detectLabels(detectLabelsRequest).get().labels().stream().anyMatch(LABELS::contains);
+            List<Label> labels = rekognitionClient.detectLabels(detectLabelsRequest).get().labels();
+
+            boolean t = labels.stream().anyMatch(label -> LABELS.contains(label.name()));
+
+            System.out.println(t);
+            return !rekognitionClient.detectLabels(detectLabelsRequest).get().labels().stream().anyMatch(label -> LABELS.contains(label.name()));
         }catch(Exception e){
             return false;
         }
@@ -117,8 +124,8 @@ public class ImageService {
             float width = faceBoundingBox.width();
             float left = faceBoundingBox.left();
             float height = faceBoundingBox.height();
-            if(!((top >= 0.2 && top <= 0.4) && (width >= 0.15 && width <= 0.3) &&
-                (left >= 0.35 && left <= 0.45) && (height >= 0.40 && height <= 0.50)))
+            if(!((top >= 0.2 && top <= 0.4) && (width >= 0.15 && width <= 0.35) &&
+                (left >= 0.30 && left <= 0.45) && (height >= 0.40 && height <= 0.55)))
                 return false;
             return true;
         }catch(Exception e){
