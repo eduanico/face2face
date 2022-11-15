@@ -35,6 +35,17 @@ public class Event implements Serializable {
     @Field("event_type")
     private EventType eventType;
 
+    @Field("detail")
+    private String detail;
+
+    public String getDetail() {
+        return detail;
+    }
+
+    public void setDetail(String detail) {
+        this.detail = detail;
+    }
+
     @Field("agent")
     @JsonIgnoreProperties(value = { "events" }, allowSetters = true)
     private Agent agent;

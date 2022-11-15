@@ -22,7 +22,9 @@ import reactor.core.publisher.Mono;
 import javax.validation.Valid;
 import java.io.*;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -48,6 +50,7 @@ public class ImageResource {
         this.checkIdClient = checkIdClient;
     }
 
+
     /**
      * Validates an array of images with an id for reference
      *
@@ -57,11 +60,12 @@ public class ImageResource {
      * @throws IOException
      */
     @PostMapping(value = "/validate")
-    public Mono<ResponseEntity> validateEvidences(@RequestPart("images") Flux<FilePart> images
+    public Mono<ResponseEntity<Map<String,Object>>> validateEvidences(@RequestPart("images") Flux<FilePart> images
         , @RequestPart("id") String id, Authentication authentication) throws ExecutionException, InterruptedException {
         EventDTO eventDTO = new EventDTO();
         AtomicInteger count = new AtomicInteger(1);
         AtomicBoolean flag = new AtomicBoolean();
+        Map<String,Object> response = new HashMap<>();
 
         agentService.findByName(authentication.getName()).subscribe(
             agentDTO -> {
@@ -75,28 +79,36 @@ public class ImageResource {
             List<DataBuffer> dblist = filePart.content().collectList().toFuture().get();
 
             for(DataBuffer d: dblist) {
-                flag.set(imageService.uploadAndValidateImages(id, d.asByteBuffer(), count.get(), list.size()));
+                flag.set(imageService.uploadAndValidateImages(id, d.asByteBuffer(), count.get(), list.size(), eventDTO));
                 count.getAndIncrement();
                 if (!flag.get()) {
                     eventDTO.setEventType(EventType.VALIDATION_FAILED);
                     eventDTO.setSuccessful(false);
                     eventService.save(eventDTO).subscribe();
                     log.info("VALIDATION FAILED");
-                    return Mono.just(new ResponseEntity(false, HttpStatus.OK));
+                    response.put("isSuccessful", false);
+                    response.put("detail", eventDTO.getDetail());
+                    return Mono.just(new ResponseEntity(response, HttpStatus.OK));
                 }
             }
         }
+
+        // put some value pairs into the JSON object .
+        response.put("isSuccessful", true);
+        response.put("detail", eventDTO.getDetail());
+
         eventDTO.setEventType(EventType.VALIDATION_SUCCESS);
         eventDTO.setSuccessful(true);
         eventService.save(eventDTO).subscribe();
         log.info("VALIDATION SUCCESS");
-        return Mono.just(new ResponseEntity(true, HttpStatus.OK));
+        return Mono.just(new ResponseEntity(response, HttpStatus.OK));
     }
 
     @PostMapping(value = "/validate-photos")
     public Mono<ResponseEntity> validateEvidences2(@RequestPart("images") Flux<FilePart> images
         , @RequestPart("id") String id, Authentication authentication) {
         EventDTO eventDTO = new EventDTO();
+
         agentService.findByName(authentication.getName()).subscribe(
             agentDTO -> {
                 eventDTO.setAgent(agentDTO);
@@ -116,7 +128,7 @@ public class ImageResource {
                     throw new RuntimeException(e);
                 }
                 for(DataBuffer d: dblist) {
-                    flag.set(imageService.uploadAndValidateImages(id, d.asByteBuffer(), count.get(), list.size()));
+                    flag.set(imageService.uploadAndValidateImages(id, d.asByteBuffer(), count.get(), list.size(), eventDTO));
                     count.getAndIncrement();
                     if (!flag.get()) {
                         eventDTO.setEventType(EventType.VALIDATION_FAILED);

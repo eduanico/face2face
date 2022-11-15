@@ -25,6 +25,17 @@ public class EventDTO implements Serializable {
 
     private AgentDTO agent;
 
+    private String detail;
+
+
+    public String getDetail() {
+        return detail;
+    }
+
+    public void setDetail(String detail) {
+        this.detail = detail;
+    }
+
     public String getId() {
         return id;
     }

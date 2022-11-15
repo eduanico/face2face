@@ -1,13 +1,12 @@
 package com.eclipsoft.face2face.service;
 
 import com.eclipsoft.face2face.Integration.CheckIdClient;
+import com.eclipsoft.face2face.service.dto.EventDTO;
 import com.eclipsoft.face2face.service.mapper.PersonMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
-import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
-import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.async.AsyncRequestBody;
 import software.amazon.awssdk.regions.Region;
@@ -36,7 +35,9 @@ public class ImageService {
         "Phone",
         "Electronics",
         "Poster",
-        "Advertisement"
+        "Advertisement",
+        "Id cards",
+        "Document"
     );
 
     public ImageService(CheckIdClient checkIdClient, PersonMapper personMapper) {
@@ -51,7 +52,7 @@ public class ImageService {
     }
 
 
-    public boolean uploadAndValidateImages(String id, ByteBuffer imageByteBuffer, int count, int size)  {
+    public boolean uploadAndValidateImages(String id, ByteBuffer imageByteBuffer, int count, int size, EventDTO eventDTO)  {
 //        AwsCredentialsProvider credentialsProvider = ProfileCredentialsProvider.builder().profileName("default").build();
         float similarityThreshold = 90F;
         float minConfidence = 55F;
@@ -78,35 +79,39 @@ public class ImageService {
             .bytes(SdkBytes.fromByteBuffer(imageByteBuffer))
             .build();
 
-        if(validateLabelsInImage(tarImage, minConfidence, rekognitionClient)) {
+        if(validateLabelsInImage(tarImage, minConfidence, rekognitionClient, eventDTO)) {
+            eventDTO.setDetail("OK");
             flag = true;
             if( count == 1 || count == size)
-                flag = validateFaceInImage(similarityThreshold, souImage, tarImage, rekognitionClient);
+                flag = validateFaceInImage(similarityThreshold, souImage, tarImage, rekognitionClient, eventDTO);
         }else {
             flag = false;
         }
         return flag;
     }
 
-    public boolean validateLabelsInImage(Image tarImage, float minConfidence, RekognitionAsyncClient rekognitionClient){
+    public boolean validateLabelsInImage(Image tarImage, float minConfidence, RekognitionAsyncClient rekognitionClient, EventDTO eventDTO){
         DetectLabelsRequest detectLabelsRequest = DetectLabelsRequest.builder()
             .minConfidence(minConfidence)
             .image(tarImage)
             .build();
         try {
-            List<Label> labels = rekognitionClient.detectLabels(detectLabelsRequest).get().labels();
 
-            boolean t = labels.stream().anyMatch(label -> LABELS.contains(label.name()));
-
-            System.out.println(t);
-            return !rekognitionClient.detectLabels(detectLabelsRequest).get().labels().stream().anyMatch(label -> LABELS.contains(label.name()));
+            return !rekognitionClient.detectLabels(detectLabelsRequest).get().labels().stream().anyMatch(label ->
+            {
+                if(LABELS.contains(label.name())){
+                    eventDTO.setDetail("Error en validación de etiqueta : "+ label.name());
+                }
+                return LABELS.contains(label.name());
+            });
         }catch(Exception e){
+            eventDTO.setDetail("Error de exception : " + e.getMessage());
             return false;
         }
     }
 
 
-    public boolean validateFaceInImage(float similarityThreshold, Image souImage, Image tarImage, RekognitionAsyncClient rekognitionClient) {
+    public boolean validateFaceInImage(float similarityThreshold, Image souImage, Image tarImage, RekognitionAsyncClient rekognitionClient, EventDTO eventDTO) {
         CompareFacesRequest request = CompareFacesRequest.builder()
             .sourceImage(souImage)
             .targetImage(tarImage)
@@ -117,6 +122,7 @@ public class ImageService {
             CompletableFuture<CompareFacesResponse> compareFacesResult = rekognitionClient.compareFaces(request);
             List<CompareFacesMatch> compareFacesMatches = compareFacesResult.get().faceMatches();
             if( compareFacesMatches.size() >= 2 || compareFacesMatches.size() == 0){
+                eventDTO.setDetail("Error en validación de rostros, el número de rostros iguales es: " + compareFacesMatches.size());
                 return false;
             }
             BoundingBox faceBoundingBox = compareFacesMatches.get(0).face().boundingBox();
@@ -125,10 +131,13 @@ public class ImageService {
             float left = faceBoundingBox.left();
             float height = faceBoundingBox.height();
             if(!((top >= 0.2 && top <= 0.4) && (width >= 0.15 && width <= 0.35) &&
-                (left >= 0.30 && left <= 0.45) && (height >= 0.40 && height <= 0.55)))
+                (left >= 0.30 && left <= 0.45) && (height >= 0.40 && height <= 0.55))) {
+                eventDTO.setDetail("Error en bounding box.");
                 return false;
+            }
             return true;
         }catch(Exception e){
+            eventDTO.setDetail("Error de exception : " + e.getMessage());
             return false;
         }
     }
