@@ -37,7 +37,8 @@ public class ImageService {
         "Poster",
         "Advertisement",
         "Id cards",
-        "Document"
+        "Document",
+        "Blackboard"
     );
 
     public ImageService(CheckIdClient checkIdClient, PersonMapper personMapper) {
@@ -125,15 +126,23 @@ public class ImageService {
                 eventDTO.setDetail("Error en validación de rostros, el número de rostros iguales es: " + compareFacesMatches.size());
                 return false;
             }
-            BoundingBox faceBoundingBox = compareFacesMatches.get(0).face().boundingBox();
+            ComparedFace face = compareFacesMatches.get(0).face();
+            Float brightness = face.quality().brightness();
+            Float sharpness = face.quality().sharpness();
+
+            BoundingBox faceBoundingBox = face.boundingBox();
             float top = faceBoundingBox.top();
             float width = faceBoundingBox.width();
             float left = faceBoundingBox.left();
             float height = faceBoundingBox.height();
-            if(!((top >= 0.2 && top <= 0.4) && (width >= 0.15 && width <= 0.35) &&
-                (left >= 0.30 && left <= 0.45) && (height >= 0.40 && height <= 0.55))) {
+            if(!((top >= 0 && top <= 0.6) && (width >= 0.15 && width <= 0.35) &&
+                (left >= 0.20 && left <= 0.45) && (height >= 0.30 && height <= 0.6))) {
                 eventDTO.setDetail("Error en bounding box.");
                 return false;
+            }
+            if(brightness <= 50F || sharpness <= 17F){
+                eventDTO.setDetail("Error de calidad, brillo : " + brightness + ", nitidez : " + sharpness);
+                return  false;
             }
             return true;
         }catch(Exception e){
