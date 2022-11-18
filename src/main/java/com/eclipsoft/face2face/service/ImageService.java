@@ -50,7 +50,8 @@ public class ImageService {
      * Validates rekognition labels and compare face on images.
      */
     public boolean rekognitionValidations(String id, String bucketName, ByteBuffer imageByteBuffer,
-                                          EventDTO eventDTO, int count, int size, float similarityThreshold, float minConfidence) {
+                                          EventDTO eventDTO, int count, int size,
+                                          float similarityThreshold, float minConfidence) {
         boolean flag = true;
 
         RekognitionAsyncClient client = RekognitionAsyncClient.builder()
@@ -86,7 +87,8 @@ public class ImageService {
 
         uploadImageToS3(id, bucketName, count, imageByteBuffer);
 
-        return rekognitionValidations(id, bucketName, imageByteBuffer, eventDTO, count, size, similarityThreshold, minConfidence);
+        return rekognitionValidations(id, bucketName, imageByteBuffer, eventDTO,
+            count, size, similarityThreshold, minConfidence);
     }
 
     /**
@@ -138,7 +140,8 @@ public class ImageService {
             float height = faceBoundingBox.height();
 
             if (compareFacesMatches.size() != 1) {
-                eventDTO.setDetail("Error en validación de rostros, el número de rostros iguales es: " + compareFacesMatches.size());
+                eventDTO.setDetail("Error en validación de rostros, el número de rostros iguales es: "
+                    + compareFacesMatches.size());
             } else if (!((top >= 0 && top <= 0.6) && (width >= 0.15 && width <= 0.35)
                 && (left >= 0.20 && left <= 0.45) && (height >= 0.30 && height <= 0.6))) {
                 eventDTO.setDetail("Error en bounding box.");
