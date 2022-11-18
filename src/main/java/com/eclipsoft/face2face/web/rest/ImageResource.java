@@ -117,6 +117,7 @@ public class ImageResource {
                 try {
                     dblist = f.content().collectList().toFuture().get();
                 } catch (InterruptedException | ExecutionException e) {
+                    log.error("Error : {}", e.getMessage());
                     throw new RuntimeException(e);
                 }
                 for (DataBuffer d : dblist) {
@@ -164,6 +165,9 @@ public class ImageResource {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * Obtiene el usuario del JTW Token
+     */
     @GetMapping(value = "/principal")
     public ResponseEntity<String> getPrincipalName(Authentication authentication) {
         return ResponseEntity.ok(authentication.getName());
