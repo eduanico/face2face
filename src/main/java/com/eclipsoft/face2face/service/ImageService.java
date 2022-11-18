@@ -23,11 +23,11 @@ public class ImageService {
 
     private final Logger log = LoggerFactory.getLogger(ImageService.class);
 
-    private final static String EVIDENCE = "/evidencia";
+    private static final String EVIDENCE = "/evidencia";
 
-    private final static String JPG_EXTENSION = ".jpg";
+    private static final String JPG_EXTENSION = ".jpg";
 
-    private final static String REFERENCE = "/reference.jpg";
+    private static final String REFERENCE = "/reference.jpg";
 
     private final List<String> LABELS = List.of(
             "Mobile Phone",

@@ -117,7 +117,6 @@ public class ImageResource {
                 try {
                     dblist = f.content().collectList().toFuture().get();
                 } catch (InterruptedException | ExecutionException e) {
-                    log.error("Error : {}", e.getMessage());
                     throw new RuntimeException(e);
                 }
                 for (DataBuffer d : dblist) {
