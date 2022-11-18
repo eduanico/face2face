@@ -42,7 +42,8 @@ public class ImageResource {
 
     private final CheckIdClient checkIdClient;
 
-    public ImageResource(ImageService imageService, AgentService agentService, EventService eventService, CheckIdClient checkIdClient) {
+    public ImageResource(ImageService imageService, AgentService agentService,
+                         EventService eventService, CheckIdClient checkIdClient) {
         this.imageService = imageService;
         this.agentService = agentService;
         this.eventService = eventService;
@@ -55,7 +56,8 @@ public class ImageResource {
      */
     @PostMapping(value = "/validate-face")
     public Mono<ResponseEntity<Map<String,Object>>> validateEvidences(@RequestPart("images") Flux<FilePart> images
-        , @RequestPart("id") String id, Authentication authentication) throws ExecutionException, InterruptedException {
+        , @RequestPart("id") String id, Authentication authentication) throws ExecutionException, InterruptedException
+    {
         EventDTO eventDTO = new EventDTO();
         AtomicInteger count = new AtomicInteger(1);
         AtomicBoolean flag = new AtomicBoolean();
@@ -118,7 +120,8 @@ public class ImageResource {
                     throw new RuntimeException(e);
                 }
                 for (DataBuffer d: dblist) {
-                    flag.set(imageService.uploadAndValidateImages(id, d.asByteBuffer(), count.get(), list.size(), eventDTO));
+                    flag.set(imageService.uploadAndValidateImages(id, d.asByteBuffer(),
+                        count.get(), list.size(), eventDTO));
                     count.getAndIncrement();
                     if (!flag.get()) {
                         eventDTO.setEventType(EventType.VALIDATION_FAILED);
@@ -145,7 +148,8 @@ public class ImageResource {
 
         return checkIdClient.findPerson(referenceModel.getId(), referenceModel.getDactilar())
                 .flatMap(person-> {
-                    imageService.uploadBase64ToS3(referenceModel.getId(), (String) person.get("fotografia"), "pruebas-id4face");
+                    imageService.uploadBase64ToS3(referenceModel.getId(),
+                        (String) person.get("fotografia"), "pruebas-id4face");
                     return Mono.just(ResponseEntity.ok().build());
                 })
             .doOnError(throwable -> Mono.just(ResponseEntity.badRequest().body(throwable.getMessage())));
@@ -155,7 +159,7 @@ public class ImageResource {
      * Receives the image in base64 from client
      */
     @PostMapping(value = "/upload-base64", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<String> uploadReferenceImage(@org.springframework.web.bind.annotation.RequestBody RequestVM referenceModel){
+    public ResponseEntity<String> uploadReferenceImage(@RequestBody RequestVM referenceModel){
         imageService.uploadBase64ToS3(referenceModel.getId(), referenceModel.getImage(), "pruebas-id4face");
         return ResponseEntity.ok().build();
     }
