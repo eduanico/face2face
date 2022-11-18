@@ -23,6 +23,12 @@ public class ImageService {
 
     private final Logger log = LoggerFactory.getLogger(ImageService.class);
 
+    private final static String EVIDENCE = "/evidencia";
+
+    private final static String JPG_EXTENSION = ".jpg";
+
+    private final static String REFERENCE = "/reference.jpg";
+
     private final List<String> LABELS = List.of(
             "Mobile Phone",
             "Cell Phone",
@@ -42,7 +48,7 @@ public class ImageService {
         S3AsyncClient client = S3AsyncClient.builder()
                 .region(Region.US_EAST_2).build();
         PutObjectRequest requestS3 = PutObjectRequest.builder()
-                .bucket(bucketName).key(id + "/evidencia" + count + ".jpg").build();
+                .bucket(bucketName).key(id + EVIDENCE + count + JPG_EXTENSION).build();
         client.putObject(requestS3, AsyncRequestBody.fromByteBuffer(imageByteBuffer));
 
     }
@@ -59,7 +65,7 @@ public class ImageService {
                 .region(Region.US_EAST_2).build();
 
         Image souImage = Image.builder()
-                .s3Object(S3Object.builder().name(id + "/reference.jpg").bucket(bucketName).build())
+                .s3Object(S3Object.builder().name(id + REFERENCE).bucket(bucketName).build())
                 .build();
 
         Image tarImage = Image.builder()
@@ -168,7 +174,7 @@ public class ImageService {
         S3AsyncClient client = S3AsyncClient.builder().region(Region.US_EAST_2)
                 .build();
         PutObjectRequest requestS3 = PutObjectRequest.builder()
-                .bucket(bucketName).key(id + "/reference.jpg").build();
+                .bucket(bucketName).key(id + REFERENCE).build();
         byte[] encoded = Base64.getDecoder().decode(base64Image);
         client.putObject(requestS3, AsyncRequestBody.fromBytes(encoded));
     }
