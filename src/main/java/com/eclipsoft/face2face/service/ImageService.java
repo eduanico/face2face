@@ -72,7 +72,7 @@ public class ImageService {
         } else {
             flag = false;
         }
-        log.debug("Validation with detail : " + eventDTO.getDetail());
+        log.debug("Validation with detail : {}", eventDTO.getDetail());
         return flag;
     }
 

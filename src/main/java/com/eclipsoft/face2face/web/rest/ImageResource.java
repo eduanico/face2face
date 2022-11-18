@@ -55,27 +55,27 @@ public class ImageResource {
      * Validates an array of images with an id for reference
      */
     @PostMapping(value = "/validate-face")
-    public Mono<ResponseEntity<Map<String,Object>>> validateEvidences(@RequestPart("images") Flux<FilePart> images
-        , @RequestPart("id") String id, Authentication authentication) throws ExecutionException, InterruptedException
-    {
+    public Mono<ResponseEntity<Map<String, Object>>> validateEvidences(@RequestPart("images") Flux<FilePart> images
+            , @RequestPart("id") String id, Authentication authentication)
+            throws ExecutionException, InterruptedException {
         EventDTO eventDTO = new EventDTO();
         AtomicInteger count = new AtomicInteger(1);
         AtomicBoolean flag = new AtomicBoolean();
-        Map<String,Object> response = new HashMap<>();
+        Map<String, Object> response = new HashMap<>();
 
         agentService.findByName(authentication.getName()).subscribe(
-            agentDTO -> {
-                eventDTO.setAgent(agentDTO);
-                eventDTO.setIdentification(id);
-                eventDTO.setValidationDate(Instant.now());
-            });
+                agentDTO -> {
+                    eventDTO.setAgent(agentDTO);
+                    eventDTO.setIdentification(id);
+                    eventDTO.setValidationDate(Instant.now());
+                });
 
         List<FilePart> list = images.collectList().toFuture().get();
 
-        for (FilePart filePart: list) {
+        for (FilePart filePart : list) {
             List<DataBuffer> dblist = filePart.content().collectList().toFuture().get();
 
-            for (DataBuffer d: dblist) {
+            for (DataBuffer d : dblist) {
                 flag.set(imageService.uploadAndValidateImages(id, d.asByteBuffer(), count.get(), list.size(), eventDTO));
                 count.getAndIncrement();
                 if (!flag.get()) {
@@ -84,7 +84,7 @@ public class ImageResource {
                     eventService.save(eventDTO).subscribe();
                     response.put("isSuccessful", false);
                     response.put("detail", eventDTO.getDetail());
-                    log.info( "VALIDATION FAILED FOR ID: {}", id);
+                    log.info("VALIDATION FAILED FOR ID: {}", id);
                     return Mono.just(new ResponseEntity<>(response, HttpStatus.OK));
                 }
             }
@@ -100,35 +100,35 @@ public class ImageResource {
 
     @PostMapping(value = "/validate-photos")
     public Mono<ResponseEntity<Boolean>> validateEvidences2(@RequestPart("images") Flux<FilePart> images
-        , @RequestPart("id") String id, Authentication authentication) {
+            , @RequestPart("id") String id, Authentication authentication) {
         EventDTO eventDTO = new EventDTO();
 
         agentService.findByName(authentication.getName()).subscribe(
-            agentDTO -> {
-                eventDTO.setAgent(agentDTO);
-                eventDTO.setIdentification(id);
-                eventDTO.setValidationDate(Instant.now());
-            });
+                agentDTO -> {
+                    eventDTO.setAgent(agentDTO);
+                    eventDTO.setIdentification(id);
+                    eventDTO.setValidationDate(Instant.now());
+                });
         AtomicInteger count = new AtomicInteger(1);
         AtomicBoolean flag = new AtomicBoolean();
         return images.collectList().flatMap(list -> {
-            for (FilePart f: list) {
+            for (FilePart f : list) {
                 List<DataBuffer> dblist;
                 try {
                     dblist = f.content().collectList().toFuture().get();
                 } catch (InterruptedException | ExecutionException e) {
                     throw new RuntimeException(e);
                 }
-                for (DataBuffer d: dblist) {
+                for (DataBuffer d : dblist) {
                     flag.set(imageService.uploadAndValidateImages(id, d.asByteBuffer(),
-                        count.get(), list.size(), eventDTO));
+                            count.get(), list.size(), eventDTO));
                     count.getAndIncrement();
                     if (!flag.get()) {
                         eventDTO.setEventType(EventType.VALIDATION_FAILED);
                         eventDTO.setSuccessful(false);
                         log.info("VALIDATION FAILED");
                         eventService.save(eventDTO).subscribe();
-                        return Mono.just(new ResponseEntity<>(false,HttpStatus.OK));
+                        return Mono.just(new ResponseEntity<>(false, HttpStatus.OK));
                     }
                 }
             }
@@ -136,7 +136,7 @@ public class ImageResource {
             eventDTO.setSuccessful(true);
             log.info("VALIDATION SUCCESS");
             eventService.save(eventDTO).subscribe();
-            return Mono.just(new ResponseEntity<>(true,HttpStatus.OK));
+            return Mono.just(new ResponseEntity<>(true, HttpStatus.OK));
         });
     }
 
@@ -144,22 +144,22 @@ public class ImageResource {
      * Fetch the image in base64 from RCE
      */
     @PostMapping(value = "/upload-image", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public Mono<ResponseEntity<Object>> uploadImage(@Valid @RequestBody RequestVM referenceModel){
+    public Mono<ResponseEntity<Object>> uploadImage(@Valid @RequestBody RequestVM referenceModel) {
 
         return checkIdClient.findPerson(referenceModel.getId(), referenceModel.getDactilar())
-                .flatMap(person-> {
+                .flatMap(person -> {
                     imageService.uploadBase64ToS3(referenceModel.getId(),
-                        (String) person.get("fotografia"), "pruebas-id4face");
+                            (String) person.get("fotografia"), "pruebas-id4face");
                     return Mono.just(ResponseEntity.ok().build());
                 })
-            .doOnError(throwable -> Mono.just(ResponseEntity.badRequest().body(throwable.getMessage())));
+                .doOnError(throwable -> Mono.just(ResponseEntity.badRequest().body(throwable.getMessage())));
     }
 
     /**
      * Receives the image in base64 from client
      */
     @PostMapping(value = "/upload-base64", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<String> uploadReferenceImage(@RequestBody RequestVM referenceModel){
+    public ResponseEntity<String> uploadReferenceImage(@RequestBody RequestVM referenceModel) {
         imageService.uploadBase64ToS3(referenceModel.getId(), referenceModel.getImage(), "pruebas-id4face");
         return ResponseEntity.ok().build();
     }
