@@ -177,10 +177,10 @@ public class ImageService {
         byte[] encoded = Base64.getDecoder().decode(base64Image);
         client.putObject(requestS3, AsyncRequestBody.fromBytes(encoded));
     }
-    
+
 
     /**
-     * Upload and validates two image soruce and target, labels and compare faces.
+     * Upload and validates two image source and target, labels and compare faces.
      */
     public boolean uploadAndValidateSourceAndTarget(String id, ByteBuffer sourceByteBuffer, ByteBuffer targetByteBuffer2, EventDTO eventDTO) {
         float similarityThreshold = 90F;
@@ -209,7 +209,7 @@ public class ImageService {
      * Validates with rekognition two images, source and target
      */
     public boolean validateTwoImages(String id, String bucketName, ByteBuffer imageByteBuffer, EventDTO eventDTO, float similarityThreshold, float minConfidence) {
-        boolean flag = true;
+        boolean flag;
 
         RekognitionAsyncClient client = RekognitionAsyncClient.builder()
                 .region(Region.US_EAST_2).build();
