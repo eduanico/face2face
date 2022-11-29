@@ -42,7 +42,7 @@ public class ImageService {
     );
 
     /**
-     * Uploads bytebuffer image to S3
+     * Uploads bytebuffer evidence image to S3
      */
     public void uploadImageToS3(String id, String bucketName, int count, ByteBuffer imageByteBuffer) {
         S3AsyncClient client = S3AsyncClient.builder()
@@ -50,7 +50,6 @@ public class ImageService {
         PutObjectRequest requestS3 = PutObjectRequest.builder()
                 .bucket(bucketName).key(id + EVIDENCE + count + JPG_EXTENSION).build();
         client.putObject(requestS3, AsyncRequestBody.fromByteBuffer(imageByteBuffer));
-
     }
 
     /**
@@ -168,7 +167,7 @@ public class ImageService {
     }
 
     /**
-     * Uploads base 64 image to S3.
+     * Uploads base 64 reference image to S3.
      */
     public void uploadBase64ToS3(String id, String base64Image, String bucketName) {
         S3AsyncClient client = S3AsyncClient.builder().region(Region.US_EAST_2)
@@ -178,5 +177,58 @@ public class ImageService {
         byte[] encoded = Base64.getDecoder().decode(base64Image);
         client.putObject(requestS3, AsyncRequestBody.fromBytes(encoded));
     }
+    
 
+    /**
+     * Upload and validates two image soruce and target, labels and compare faces.
+     */
+    public boolean uploadAndValidateSourceAndTarget(String id, ByteBuffer sourceByteBuffer, ByteBuffer targetByteBuffer2, EventDTO eventDTO) {
+        float similarityThreshold = 90F;
+        float minConfidence = 55F;
+        String bucketName = "pruebas-id4face";
+
+        uploadSourceToS3(id, bucketName, sourceByteBuffer);
+        uploadImageToS3(id, bucketName, 1, targetByteBuffer2);
+
+        return validateTwoImages(id, bucketName, targetByteBuffer2, eventDTO, similarityThreshold, minConfidence);
+
+    }
+
+    /**
+     * Uploads a bytebuffer image to S3 as evidence
+     */
+    public void uploadSourceToS3(String id, String bucketName, ByteBuffer imageByteBuffer) {
+        S3AsyncClient client = S3AsyncClient.builder()
+                .region(Region.US_EAST_2).build();
+        PutObjectRequest requestS3 = PutObjectRequest.builder()
+                .bucket(bucketName).key(id + REFERENCE).build();
+        client.putObject(requestS3, AsyncRequestBody.fromByteBuffer(imageByteBuffer));
+    }
+
+    /**
+     * Validates with rekognition two images, source and target
+     */
+    public boolean validateTwoImages(String id, String bucketName, ByteBuffer imageByteBuffer, EventDTO eventDTO, float similarityThreshold, float minConfidence) {
+        boolean flag = true;
+
+        RekognitionAsyncClient client = RekognitionAsyncClient.builder()
+                .region(Region.US_EAST_2).build();
+
+        Image souImage = Image.builder()
+                .s3Object(S3Object.builder().name(id + REFERENCE).bucket(bucketName).build())
+                .build();
+
+        Image tarImage = Image.builder()
+                .bytes(SdkBytes.fromByteBuffer(imageByteBuffer))
+                .build();
+
+        if (validateLabelsInImage(tarImage, minConfidence, client, eventDTO)) {
+            eventDTO.setDetail("OK");
+            flag = validateFaceInImage(similarityThreshold, souImage, tarImage, client, eventDTO);
+        } else {
+            flag = false;
+        }
+        log.debug("Validation with detail : {}", eventDTO.getDetail());
+        return flag;
+    }
 }

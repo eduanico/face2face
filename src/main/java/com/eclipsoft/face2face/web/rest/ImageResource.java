@@ -24,6 +24,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -98,6 +99,50 @@ public class ImageResource {
         return Mono.just(new ResponseEntity<>(response, HttpStatus.OK));
     }
 
+    @PostMapping(value = "/validate-photo")
+    public Mono<ResponseEntity<Map<String, Object>>> validateImage(@RequestPart("source") Mono<FilePart> source
+            , @RequestPart("target") Mono<FilePart> target, Authentication authentication) throws ExecutionException, InterruptedException {
+        EventDTO eventDTO = new EventDTO();
+        AtomicInteger count = new AtomicInteger(1);
+        AtomicBoolean flag = new AtomicBoolean();
+        Map<String, Object> response = new HashMap<>();
+        String id = UUID.randomUUID().toString().substring(0, 10);
+        agentService.findByName(authentication.getName()).subscribe(
+                agentDTO -> {
+                    eventDTO.setAgent(agentDTO);
+                    eventDTO.setIdentification(id);
+                    eventDTO.setValidationDate(Instant.now());
+                });
+
+        FilePart sourceImage = source.toFuture().get();
+        FilePart targetImage = target.toFuture().get();
+        List<DataBuffer> sourceDb = sourceImage.content().collectList().toFuture().get();
+        List<DataBuffer> targetDb = targetImage.content().collectList().toFuture().get();
+
+
+        flag.set(imageService.uploadAndValidateSourceAndTarget(id, sourceDb.get(0).asByteBuffer(), targetDb.get(0).asByteBuffer(), eventDTO));
+        count.getAndIncrement();
+        if (!flag.get()) {
+            eventDTO.setEventType(EventType.VALIDATION_FAILED);
+            eventDTO.setSuccessful(false);
+            eventService.save(eventDTO).subscribe();
+            response.put("isSuccessful", false);
+            response.put("detail", eventDTO.getDetail());
+            log.info("VALIDATION FAILED FOR ID: {}", id);
+            return Mono.just(new ResponseEntity<>(response, HttpStatus.OK));
+        }
+
+        response.put("isSuccessful", true);
+        response.put("detail", eventDTO.getDetail());
+        eventDTO.setEventType(EventType.VALIDATION_SUCCESS);
+        eventDTO.setSuccessful(true);
+        eventService.save(eventDTO).
+
+                subscribe();
+        log.info("VALIDATION SUCCESS FOR ID: {}", id);
+        return Mono.just(new ResponseEntity<>(response, HttpStatus.OK));
+    }
+
     @PostMapping(value = "/validate-photos")
     public Mono<ResponseEntity<Boolean>> validateEvidences2(@RequestPart("images") Flux<FilePart> images
             , @RequestPart("id") String id, Authentication authentication) {
@@ -165,7 +210,7 @@ public class ImageResource {
     }
 
     /**
-     * Obtiene el usuario del JTW Token
+     * Obtains the user from JTW Token
      */
     @GetMapping(value = "/principal")
     public ResponseEntity<String> getPrincipalName(Authentication authentication) {
