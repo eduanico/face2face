@@ -1,18 +1,11 @@
 package com.eclipsoft.face2face.web.rest.errors;
 
-import java.net.URI;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataAccessException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageConversionException;
 import org.springframework.validation.BindingResult;
@@ -20,17 +13,22 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.support.WebExchangeBindException;
 import org.springframework.web.server.ServerWebExchange;
-import org.zalando.problem.DefaultProblem;
-import org.zalando.problem.Problem;
-import org.zalando.problem.ProblemBuilder;
-import org.zalando.problem.Status;
-import org.zalando.problem.StatusType;
+import org.zalando.problem.*;
 import org.zalando.problem.spring.webflux.advice.ProblemHandling;
 import org.zalando.problem.spring.webflux.advice.security.SecurityAdviceTrait;
 import org.zalando.problem.violations.ConstraintViolationProblem;
 import reactor.core.publisher.Mono;
 import tech.jhipster.config.JHipsterConstants;
 import tech.jhipster.web.util.HeaderUtil;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.net.URI;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Controller advice to translate the server side exceptions to client-friendly json structures.
@@ -62,23 +60,35 @@ public class ExceptionTranslator implements ProblemHandling, SecurityAdviceTrait
             return Mono.empty();
         }
         Problem problem = entity.getBody();
+
         if (!(problem instanceof ConstraintViolationProblem || problem instanceof DefaultProblem)) {
             return Mono.just(entity);
         }
 
         ProblemBuilder builder = Problem
-            .builder()
-            .withType(Problem.DEFAULT_TYPE.equals(problem.getType()) ? ErrorConstants.DEFAULT_TYPE : problem.getType())
-            .withStatus(problem.getStatus())
-            .withTitle(problem.getTitle())
-            .with(PATH_KEY, request.getRequest().getPath().value());
+                .builder()
+                .withType(Problem.DEFAULT_TYPE.equals(problem.getType()) ? ErrorConstants.DEFAULT_TYPE : problem.getType())
+                .withStatus(problem.getStatus())
+                .withTitle(problem.getTitle())
+                .with(PATH_KEY, request.getRequest().getPath().value());
 
         if (problem instanceof ConstraintViolationProblem) {
             builder
-                .with(VIOLATIONS_KEY, ((ConstraintViolationProblem) problem).getViolations())
-                .with(MESSAGE_KEY, ErrorConstants.ERR_VALIDATION);
-        } else {
+                    .with(VIOLATIONS_KEY, ((ConstraintViolationProblem) problem).getViolations())
+                    .with(MESSAGE_KEY, ErrorConstants.ERR_VALIDATION);
+        } else if (problem.getDetail().equals("CheckId received a bad request")) {
             builder.withCause(((DefaultProblem) problem).getCause()).withDetail(problem.getDetail()).withInstance(problem.getInstance());
+            problem.getParameters().forEach(builder::with);
+            builder.withStatus(Status.BAD_REQUEST).withTitle("CheckId received a bad request")
+                    .withDetail("Cédula de identidad o código dactilar incorrectos");
+            if (!problem.getParameters().containsKey(MESSAGE_KEY) && problem.getStatus() != null) {
+                builder.with(MESSAGE_KEY, "error.http." + 400);
+            }
+            return Mono.just(new ResponseEntity<>(builder.build(), entity.getHeaders(), HttpStatus.BAD_REQUEST));
+        } else {
+            builder.withCause(((DefaultProblem) problem).getCause())
+                    .withStatus(problem.getStatus())
+                    .withDetail(problem.getDetail()).withInstance(problem.getInstance());
             problem.getParameters().forEach(builder::with);
             if (!problem.getParameters().containsKey(MESSAGE_KEY) && problem.getStatus() != null) {
                 builder.with(MESSAGE_KEY, "error.http." + problem.getStatus().getStatusCode());
@@ -91,58 +101,58 @@ public class ExceptionTranslator implements ProblemHandling, SecurityAdviceTrait
     public Mono<ResponseEntity<Problem>> handleBindingResult(WebExchangeBindException ex, @Nonnull ServerWebExchange request) {
         BindingResult result = ex.getBindingResult();
         List<FieldErrorVM> fieldErrors = result
-            .getFieldErrors()
-            .stream()
-            .map(f ->
-                new FieldErrorVM(
-                    f.getObjectName().replaceFirst("DTO$", ""),
-                    f.getField(),
-                    StringUtils.isNotBlank(f.getDefaultMessage()) ? f.getDefaultMessage() : f.getCode()
+                .getFieldErrors()
+                .stream()
+                .map(f ->
+                        new FieldErrorVM(
+                                f.getObjectName().replaceFirst("DTO$", ""),
+                                f.getField(),
+                                StringUtils.isNotBlank(f.getDefaultMessage()) ? f.getDefaultMessage() : f.getCode()
+                        )
                 )
-            )
-            .collect(Collectors.toList());
+                .collect(Collectors.toList());
 
         Problem problem = Problem
-            .builder()
-            .withType(ErrorConstants.CONSTRAINT_VIOLATION_TYPE)
-            .withTitle("Data binding and validation failure")
-            .withStatus(Status.BAD_REQUEST)
-            .with(MESSAGE_KEY, ErrorConstants.ERR_VALIDATION)
-            .with(FIELD_ERRORS_KEY, fieldErrors)
-            .build();
+                .builder()
+                .withType(ErrorConstants.CONSTRAINT_VIOLATION_TYPE)
+                .withTitle("Data binding and validation failure")
+                .withStatus(Status.BAD_REQUEST)
+                .with(MESSAGE_KEY, ErrorConstants.ERR_VALIDATION)
+                .with(FIELD_ERRORS_KEY, fieldErrors)
+                .build();
         return create(ex, problem, request);
     }
 
     @ExceptionHandler
     public Mono<ResponseEntity<Problem>> handleEmailAlreadyUsedException(
-        com.eclipsoft.face2face.service.EmailAlreadyUsedException ex,
-        ServerWebExchange request
+            com.eclipsoft.face2face.service.EmailAlreadyUsedException ex,
+            ServerWebExchange request
     ) {
         EmailAlreadyUsedException problem = new EmailAlreadyUsedException();
         return create(
-            problem,
-            request,
-            HeaderUtil.createFailureAlert(applicationName, true, problem.getEntityName(), problem.getErrorKey(), problem.getMessage())
+                problem,
+                request,
+                HeaderUtil.createFailureAlert(applicationName, true, problem.getEntityName(), problem.getErrorKey(), problem.getMessage())
         );
     }
 
     @ExceptionHandler
     public Mono<ResponseEntity<Problem>> handleUsernameAlreadyUsedException(
-        com.eclipsoft.face2face.service.UsernameAlreadyUsedException ex,
-        ServerWebExchange request
+            com.eclipsoft.face2face.service.UsernameAlreadyUsedException ex,
+            ServerWebExchange request
     ) {
         LoginAlreadyUsedException problem = new LoginAlreadyUsedException();
         return create(
-            problem,
-            request,
-            HeaderUtil.createFailureAlert(applicationName, true, problem.getEntityName(), problem.getErrorKey(), problem.getMessage())
+                problem,
+                request,
+                HeaderUtil.createFailureAlert(applicationName, true, problem.getEntityName(), problem.getErrorKey(), problem.getMessage())
         );
     }
 
     @ExceptionHandler
     public Mono<ResponseEntity<Problem>> handleInvalidPasswordException(
-        com.eclipsoft.face2face.service.InvalidPasswordException ex,
-        ServerWebExchange request
+            com.eclipsoft.face2face.service.InvalidPasswordException ex,
+            ServerWebExchange request
     ) {
         return create(new InvalidPasswordException(), request);
     }
@@ -150,9 +160,9 @@ public class ExceptionTranslator implements ProblemHandling, SecurityAdviceTrait
     @ExceptionHandler
     public Mono<ResponseEntity<Problem>> handleBadRequestAlertException(BadRequestAlertException ex, ServerWebExchange request) {
         return create(
-            ex,
-            request,
-            HeaderUtil.createFailureAlert(applicationName, true, ex.getEntityName(), ex.getErrorKey(), ex.getMessage())
+                ex,
+                request,
+                HeaderUtil.createFailureAlert(applicationName, true, ex.getEntityName(), ex.getErrorKey(), ex.getMessage())
         );
     }
 
@@ -169,48 +179,48 @@ public class ExceptionTranslator implements ProblemHandling, SecurityAdviceTrait
         if (activeProfiles.contains(JHipsterConstants.SPRING_PROFILE_PRODUCTION)) {
             if (throwable instanceof HttpMessageConversionException) {
                 return Problem
-                    .builder()
-                    .withType(type)
-                    .withTitle(status.getReasonPhrase())
-                    .withStatus(status)
-                    .withDetail("Unable to convert http message")
-                    .withCause(
-                        Optional.ofNullable(throwable.getCause()).filter(cause -> isCausalChainsEnabled()).map(this::toProblem).orElse(null)
-                    );
+                        .builder()
+                        .withType(type)
+                        .withTitle(status.getReasonPhrase())
+                        .withStatus(status)
+                        .withDetail("Unable to convert http message")
+                        .withCause(
+                                Optional.ofNullable(throwable.getCause()).filter(cause -> isCausalChainsEnabled()).map(this::toProblem).orElse(null)
+                        );
             }
             if (throwable instanceof DataAccessException) {
                 return Problem
-                    .builder()
-                    .withType(type)
-                    .withTitle(status.getReasonPhrase())
-                    .withStatus(status)
-                    .withDetail("Failure during data access")
-                    .withCause(
-                        Optional.ofNullable(throwable.getCause()).filter(cause -> isCausalChainsEnabled()).map(this::toProblem).orElse(null)
-                    );
+                        .builder()
+                        .withType(type)
+                        .withTitle(status.getReasonPhrase())
+                        .withStatus(status)
+                        .withDetail("Failure during data access")
+                        .withCause(
+                                Optional.ofNullable(throwable.getCause()).filter(cause -> isCausalChainsEnabled()).map(this::toProblem).orElse(null)
+                        );
             }
             if (containsPackageName(throwable.getMessage())) {
                 return Problem
-                    .builder()
-                    .withType(type)
-                    .withTitle(status.getReasonPhrase())
-                    .withStatus(status)
-                    .withDetail("Unexpected runtime exception")
-                    .withCause(
-                        Optional.ofNullable(throwable.getCause()).filter(cause -> isCausalChainsEnabled()).map(this::toProblem).orElse(null)
-                    );
+                        .builder()
+                        .withType(type)
+                        .withTitle(status.getReasonPhrase())
+                        .withStatus(status)
+                        .withDetail("Unexpected runtime exception")
+                        .withCause(
+                                Optional.ofNullable(throwable.getCause()).filter(cause -> isCausalChainsEnabled()).map(this::toProblem).orElse(null)
+                        );
             }
         }
 
         return Problem
-            .builder()
-            .withType(type)
-            .withTitle(status.getReasonPhrase())
-            .withStatus(status)
-            .withDetail(throwable.getMessage())
-            .withCause(
-                Optional.ofNullable(throwable.getCause()).filter(cause -> isCausalChainsEnabled()).map(this::toProblem).orElse(null)
-            );
+                .builder()
+                .withType(type)
+                .withTitle(status.getReasonPhrase())
+                .withStatus(status)
+                .withDetail(throwable.getMessage())
+                .withCause(
+                        Optional.ofNullable(throwable.getCause()).filter(cause -> isCausalChainsEnabled()).map(this::toProblem).orElse(null)
+                );
     }
 
     private boolean containsPackageName(String message) {

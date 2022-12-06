@@ -48,86 +48,87 @@ public class CheckIdClient {
 
     public void connectionValid() throws RuntimeException {
         webClient
-            .get()
-            .uri("/management/health")
-            .retrieve()
-            .onStatus(
-                HttpStatus::is4xxClientError,
-                response -> {
-                    throw new RuntimeException();
-                }
-            )
-            .onStatus(
-                HttpStatus::is5xxServerError,
-                response -> {
-                    throw new RuntimeException();
-                }
-            )
-            .bodyToMono(String.class)
-            .onErrorMap(ConnectTimeoutException.class, connectTimeoutException -> new Exception(connectTimeoutException.getMessage()))
-            .toFuture();
+                .get()
+                .uri("/management/health")
+                .retrieve()
+                .onStatus(
+                        HttpStatus::is4xxClientError,
+                        response -> {
+                            throw new RuntimeException();
+                        }
+                )
+                .onStatus(
+                        HttpStatus::is5xxServerError,
+                        response -> {
+                            throw new RuntimeException();
+                        }
+                )
+                .bodyToMono(String.class)
+                .onErrorMap(ConnectTimeoutException.class, connectTimeoutException -> new Exception(connectTimeoutException.getMessage()))
+                .toFuture();
     }
 
     private WebClient buildWebClient() {
         int readAndWriteTimeout = this.checkIdProperties.getTimeoutInSeconds() * 1000;
 
         HttpClient httpClient = HttpClient
-            .create()
-            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, CONNECT_TIMEOUT_IN_SECONDS * 1000)
-            .responseTimeout(Duration.ofMillis(readAndWriteTimeout))
-            .doOnConnected(
-                conn ->
-                    conn
-                        .addHandlerLast(new ReadTimeoutHandler(readAndWriteTimeout, TimeUnit.MILLISECONDS))
-                        .addHandlerLast(new WriteTimeoutHandler(readAndWriteTimeout, TimeUnit.MILLISECONDS))
-            );
+                .create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, CONNECT_TIMEOUT_IN_SECONDS * 1000)
+                .responseTimeout(Duration.ofMillis(readAndWriteTimeout))
+                .doOnConnected(
+                        conn ->
+                                conn
+                                        .addHandlerLast(new ReadTimeoutHandler(readAndWriteTimeout, TimeUnit.MILLISECONDS))
+                                        .addHandlerLast(new WriteTimeoutHandler(readAndWriteTimeout, TimeUnit.MILLISECONDS))
+                );
 
         ClientHttpConnector connector = new ReactorClientHttpConnector(httpClient);
         return WebClient
-            .builder()
-            .baseUrl(this.checkIdProperties.getBaseUrl())
-            .clientConnector(connector)
-            .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-            .build();
+                .builder()
+                .baseUrl(this.checkIdProperties.getBaseUrl())
+                .clientConnector(connector)
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .build();
     }
 
     public Mono<Map<String, Object>> findPerson(String identification, String dactilar) {
         log.debug("Request to findPerson: {}, {}", identification, dactilar);
 
         return this.authenticate()
-            .flatMap(auth -> {
-                String jwt = this.authenticateToJwt(auth);
-                return webClient
-                    .post()
-                    .uri("/api/find-person-biometric-data")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .accept(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, jwt)
-                    .acceptCharset(StandardCharsets.UTF_8)
-                    .body(BodyInserters.fromValue(
-                        Map.of("identificacion", identification, "dactilar", dactilar)
-                    ))
-                    .retrieve()
-                    .onStatus(Predicate.not(HttpStatus::is2xxSuccessful),
-                        clientResponse ->
-                            clientResponse.bodyToMono(JsonNode.class)
-                            .flatMap(jsonNode -> {
+                .flatMap(auth -> {
+                    String jwt = this.authenticateToJwt(auth);
+                    return webClient
+                            .post()
+                            .uri("/api/find-person-biometric-data")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .accept(MediaType.APPLICATION_JSON)
+                            .header(HttpHeaders.AUTHORIZATION, jwt)
+                            .acceptCharset(StandardCharsets.UTF_8)
+                            .body(BodyInserters.fromValue(
+                                    Map.of("identificacion", identification, "dactilar", dactilar)
+                            ))
+                            .retrieve()
+                            .onStatus(Predicate.not(HttpStatus::is2xxSuccessful),
+                                    clientResponse ->
+                                            clientResponse.bodyToMono(JsonNode.class)
+                                                    .flatMap(jsonNode -> {
 
-                                String errorMessage = "";
-                                if(jsonNode.has("detail")) {
-                                    errorMessage = jsonNode.get("detail").asText("");
-                                }
+                                                        String errorMessage = "";
+                                                        if (jsonNode.has("detail")) {
+                                                            errorMessage = jsonNode.get("detail").asText("");
+                                                        }
 
-                                if (clientResponse.statusCode().is4xxClientError()) {
-                                    if (errorMessage.isEmpty()) {
-                                        return Mono.error(new CheckIdBadRequestException());
-                                    }
-                                    return Mono.error(new CheckIdBadRequestException(errorMessage));
-                                }
-                                return Mono.error(new CheckIdIntegrationException("CheckId sent an unexpected response related to server error. " + errorMessage));
-                            })
-                    )
-                    .bodyToMono(new ParameterizedTypeReference<>() {});
+                                                        if (clientResponse.statusCode().is4xxClientError()) {
+                                                            if (errorMessage.isEmpty()) {
+                                                                throw new CheckIdBadRequestException();
+                                                            }
+                                                            throw new CheckIdBadRequestException(errorMessage);
+                                                        }
+                                                        throw new CheckIdIntegrationException("CheckId sent an unexpected response related to server error. " + errorMessage);
+                                                    })
+                            )
+                            .bodyToMono(new ParameterizedTypeReference<>() {
+                            });
                 });
     }
 
@@ -135,125 +136,127 @@ public class CheckIdClient {
         log.debug("Request to findPersonDemographicData: {}", identification);
 
         return this.authenticate()
-            .flatMap(auth -> {
-                String jwt = this.authenticateToJwt(auth);
-                return webClient
-                    .post()
-                    .uri("/api/find-person-demographic-data")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .accept(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, jwt)
-                    .acceptCharset(StandardCharsets.UTF_8)
-                    .body(BodyInserters.fromValue(
-                        Map.of("identificacion", identification)
-                    ))
-                    .retrieve()
-                    .onStatus(Predicate.not(HttpStatus::is2xxSuccessful),
-                        clientResponse ->
-                            clientResponse.bodyToMono(JsonNode.class)
-                                .flatMap(jsonNode -> {
+                .flatMap(auth -> {
+                    String jwt = this.authenticateToJwt(auth);
+                    return webClient
+                            .post()
+                            .uri("/api/find-person-demographic-data")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .accept(MediaType.APPLICATION_JSON)
+                            .header(HttpHeaders.AUTHORIZATION, jwt)
+                            .acceptCharset(StandardCharsets.UTF_8)
+                            .body(BodyInserters.fromValue(
+                                    Map.of("identificacion", identification)
+                            ))
+                            .retrieve()
+                            .onStatus(Predicate.not(HttpStatus::is2xxSuccessful),
+                                    clientResponse ->
+                                            clientResponse.bodyToMono(JsonNode.class)
+                                                    .flatMap(jsonNode -> {
 
-                                    String errorMessage = "";
-                                    if(jsonNode.has("detail")) {
-                                        errorMessage = jsonNode.get("detail").asText("");
-                                    }
+                                                        String errorMessage = "";
+                                                        if (jsonNode.has("detail")) {
+                                                            errorMessage = jsonNode.get("detail").asText("");
+                                                        }
 
-                                    if (clientResponse.statusCode().is4xxClientError()) {
-                                        if (errorMessage.isEmpty()) {
-                                            return Mono.error(new CheckIdBadRequestException());
-                                        }
-                                        return Mono.error(new CheckIdBadRequestException(errorMessage));
-                                    }
-                                    return Mono.error(new CheckIdIntegrationException("CheckId sent an unexpected response related to server error. " + errorMessage));
-                                })
-                    )
-                    .bodyToMono(new ParameterizedTypeReference<>() {});
-            });
+                                                        if (clientResponse.statusCode().is4xxClientError()) {
+                                                            if (errorMessage.isEmpty()) {
+                                                                return Mono.error(new CheckIdBadRequestException());
+                                                            }
+                                                            return Mono.error(new CheckIdBadRequestException(errorMessage));
+                                                        }
+                                                        return Mono.error(new CheckIdIntegrationException("CheckId sent an unexpected response related to server error. " + errorMessage));
+                                                    })
+                            )
+                            .bodyToMono(new ParameterizedTypeReference<>() {
+                            });
+                });
     }
 
     public Mono<Map<String, Object>> findPersonBiometricDataFromCRCG(String identification) {
         log.debug("Request to findPersonBiometricDataFromCRCG: {}", identification);
 
         return this.authenticate()
-            .flatMap(auth -> {
-                String jwt = this.authenticateToJwt(auth);
-                return webClient
-                    .post()
-                    .uri("/api/crcg/find-person-biometric-data")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .accept(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, jwt)
-                    .acceptCharset(StandardCharsets.UTF_8)
-                    .body(BodyInserters.fromValue(
-                        Map.of("identificacion", identification)
-                    ))
-                    .retrieve()
-                    .onStatus(Predicate.not(HttpStatus::is2xxSuccessful),
-                        clientResponse ->
-                            clientResponse.bodyToMono(JsonNode.class)
-                                .flatMap(jsonNode -> {
+                .flatMap(auth -> {
+                    String jwt = this.authenticateToJwt(auth);
+                    return webClient
+                            .post()
+                            .uri("/api/crcg/find-person-biometric-data")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .accept(MediaType.APPLICATION_JSON)
+                            .header(HttpHeaders.AUTHORIZATION, jwt)
+                            .acceptCharset(StandardCharsets.UTF_8)
+                            .body(BodyInserters.fromValue(
+                                    Map.of("identificacion", identification)
+                            ))
+                            .retrieve()
+                            .onStatus(Predicate.not(HttpStatus::is2xxSuccessful),
+                                    clientResponse ->
+                                            clientResponse.bodyToMono(JsonNode.class)
+                                                    .flatMap(jsonNode -> {
 
-                                    String errorMessage = "";
-                                    if (jsonNode.has("detail")) {
-                                        errorMessage = jsonNode.get("detail").asText("");
-                                    }
+                                                        String errorMessage = "";
+                                                        if (jsonNode.has("detail")) {
+                                                            errorMessage = jsonNode.get("detail").asText("");
+                                                        }
 
-                                    if (clientResponse.statusCode().is4xxClientError()) {
-                                        if (errorMessage.isEmpty()) {
-                                            return Mono.error(new CheckIdBadRequestException());
-                                        }
-                                        return Mono.error(new CheckIdBadRequestException(errorMessage));
-                                    }
-                                    return Mono.error(new CheckIdIntegrationException("CheckId sent an unexpected response related to server error. " + errorMessage));
-                                })
-                    )
-                    .bodyToMono(new ParameterizedTypeReference<>() {
-                    });
-            });
+                                                        if (clientResponse.statusCode().is4xxClientError()) {
+                                                            if (errorMessage.isEmpty()) {
+                                                                return Mono.error(new CheckIdBadRequestException());
+                                                            }
+                                                            return Mono.error(new CheckIdBadRequestException(errorMessage));
+                                                        }
+                                                        return Mono.error(new CheckIdIntegrationException("CheckId sent an unexpected response related to server error. " + errorMessage));
+                                                    })
+                            )
+                            .bodyToMono(new ParameterizedTypeReference<>() {
+                            });
+                });
     }
 
     public Mono<Map<String, Object>> findLocalPersonBiometricData(String identification) {
         log.debug("Request to findLocalPersonBiometricData: {}", identification);
 
         return this.authenticate()
-            .flatMap(auth -> {
+                .flatMap(auth -> {
 
-                String jwt = this.authenticateToJwt(auth);
+                    String jwt = this.authenticateToJwt(auth);
 
-                return webClient
-                    .post()
-                    .uri("/api/local/find-person-biometric-data")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .accept(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, jwt)
-                    .acceptCharset(StandardCharsets.UTF_8)
-                    .body(BodyInserters.fromValue(
-                        Map.of("identificacion", identification)
-                    ))
-                    .retrieve()
-                    .bodyToMono(new ParameterizedTypeReference<>() {});
-            });
+                    return webClient
+                            .post()
+                            .uri("/api/local/find-person-biometric-data")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .accept(MediaType.APPLICATION_JSON)
+                            .header(HttpHeaders.AUTHORIZATION, jwt)
+                            .acceptCharset(StandardCharsets.UTF_8)
+                            .body(BodyInserters.fromValue(
+                                    Map.of("identificacion", identification)
+                            ))
+                            .retrieve()
+                            .bodyToMono(new ParameterizedTypeReference<>() {
+                            });
+                });
     }
 
     private Mono<String> authenticate() {
         log.debug("Request to authenticate");
 
         return webClient
-            .post()
-            .uri("/api/authenticate")
-            .contentType(MediaType.APPLICATION_JSON)
-            .accept(MediaType.APPLICATION_JSON)
-            .acceptCharset(StandardCharsets.UTF_8)
-            .body(
-                BodyInserters.fromValue(
-                    Map.of("username", checkIdProperties.getUsername(), "password", checkIdProperties.getPassword())
+                .post()
+                .uri("/api/authenticate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON)
+                .acceptCharset(StandardCharsets.UTF_8)
+                .body(
+                        BodyInserters.fromValue(
+                                Map.of("username", checkIdProperties.getUsername(), "password", checkIdProperties.getPassword())
+                        )
                 )
-            )
-            .retrieve()
-            .bodyToMono(String.class);
+                .retrieve()
+                .bodyToMono(String.class);
     }
 
-    private String authenticateToJwt(String jsonResponse){
+    private String authenticateToJwt(String jsonResponse) {
         log.debug("REST Request authenticateToJwt: {}", jsonResponse);
 
         JsonNode res = Utils.jsonToEntity(jsonResponse, JsonNode.class);

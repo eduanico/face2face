@@ -147,7 +147,7 @@ public class ImageResource {
     /**
      * Fetch the image in base64 from RCE
      */
-    @PostMapping(value = "/upload-image", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(value = "/check-id", consumes = MediaType.APPLICATION_JSON_VALUE)
     public Mono<ResponseEntity<Object>> uploadImage(@Valid @RequestBody RequestVM referenceModel) {
 
         return checkIdClient.findPerson(referenceModel.getId(), referenceModel.getDactilar())
@@ -167,15 +167,6 @@ public class ImageResource {
         imageService.uploadBase64ToS3(referenceModel.getId(), referenceModel.getImage(), "pruebas-id4face");
         return ResponseEntity.ok().build();
     }
-
-    /**
-     * Obtains the user from JTW Token
-     */
-    @GetMapping(value = "/principal")
-    public ResponseEntity<String> getPrincipalName(Authentication authentication) {
-        return ResponseEntity.ok(authentication.getName());
-    }
-
 
     /**
      * Validates source and target photo without checkid and id

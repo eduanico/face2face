@@ -33,12 +33,12 @@ public class ImageService {
             "Mobile Phone",
             "Cell Phone",
             "Phone",
-            "Electronics",
             "Poster",
             "Advertisement",
             "Id cards",
             "Document",
-            "Blackboard"
+            "Collage",
+            "Art"
     );
 
     /**
