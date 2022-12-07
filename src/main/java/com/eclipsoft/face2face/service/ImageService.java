@@ -140,18 +140,24 @@ public class ImageService {
             Float brightness = face.quality().brightness();
             Float sharpness = face.quality().sharpness();
 
-            BoundingBox faceBoundingBox = face.boundingBox();
-            float top = faceBoundingBox.top();
-            float width = faceBoundingBox.width();
-            float left = faceBoundingBox.left();
-            float height = faceBoundingBox.height();
+//            BoundingBox faceBoundingBox = face.boundingBox();
+//            float top = faceBoundingBox.top();
+//            float width = faceBoundingBox.width();
+//            float left = faceBoundingBox.left();
+//            float height = faceBoundingBox.height();
+//
+//            /**
+//             * right < 0.7
+//             * left > 0.3
+//             *  top > 0.3
+//             * bottom < 0.8
+//             */
 
             if (compareFacesMatches.size() != 1) {
                 eventDTO.setDetail("Error en validación de rostros, el número de rostros iguales es: "
                         + compareFacesMatches.size());
-            } else if (!((top >= 0 && top <= 0.6) && (width >= 0.15 && width <= 0.35)
-                    && (left >= 0.20 && left <= 0.45) && (height >= 0.30 && height <= 0.6))) {
-                eventDTO.setDetail("Error en bounding box.");
+//            } else if (!((top >= 0.3 && top + height <= 0.8) && (left >= 0.3 && left + width <= 0.7))) {
+//                eventDTO.setDetail("Error en bounding box.");
             } else if (brightness >= 80F) {
                 result = true;
             } else if (brightness <= 50F || sharpness <= 17F) {
