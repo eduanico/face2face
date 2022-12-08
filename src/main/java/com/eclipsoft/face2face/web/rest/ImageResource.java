@@ -178,7 +178,7 @@ public class ImageResource {
             if (Boolean.TRUE.equals(flag)) {
                 response.put(IS_SUCCESSFUL, false);
                 response.put(DETAIL, "Número máximo de intentos excedidos por hoy");
-                return Mono.just(new ResponseEntity<>(response, HttpStatus.OK));
+                return Mono.just(new ResponseEntity<>(response, HttpStatus.FORBIDDEN));
 
             } else if (imageService.referenceExistsInS3(id)) {
                 response.put(IS_SUCCESSFUL, true);
