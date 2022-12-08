@@ -29,6 +29,8 @@ public class ImageService {
 
     private static final String REFERENCE = "/reference.jpg";
 
+    private static final String BUCKET_NAME = "pruebas-id4face";
+
     private final List<String> LABELS = List.of(
             "Mobile Phone",
             "Cell Phone",
@@ -89,11 +91,10 @@ public class ImageService {
                                            int count, int size, EventDTO eventDTO) {
         float similarityThreshold = 90F;
         float minConfidence = 55F;
-        String bucketName = "pruebas-id4face";
 
-        uploadImageToS3(id, bucketName, count, imageByteBuffer);
+        uploadImageToS3(id, BUCKET_NAME, count, imageByteBuffer);
 
-        return rekognitionValidations(id, bucketName, imageByteBuffer, eventDTO,
+        return rekognitionValidations(id, BUCKET_NAME, imageByteBuffer, eventDTO,
                 count, size, similarityThreshold, minConfidence);
     }
 
@@ -140,24 +141,19 @@ public class ImageService {
             Float brightness = face.quality().brightness();
             Float sharpness = face.quality().sharpness();
 
-//            BoundingBox faceBoundingBox = face.boundingBox();
-//            float top = faceBoundingBox.top();
-//            float width = faceBoundingBox.width();
-//            float left = faceBoundingBox.left();
-//            float height = faceBoundingBox.height();
-//
-//            /**
-//             * right < 0.7
-//             * left > 0.3
-//             *  top > 0.3
-//             * bottom < 0.8
-//             */
+            BoundingBox faceBoundingBox = face.boundingBox();
+            float top = faceBoundingBox.top();
+            float width = faceBoundingBox.width();
+            float left = faceBoundingBox.left();
+            float height = faceBoundingBox.height();
+
 
             if (compareFacesMatches.size() != 1) {
                 eventDTO.setDetail("Error en validación de rostros, el número de rostros iguales es: "
                         + compareFacesMatches.size());
-//            } else if (!((top >= 0.3 && top + height <= 0.8) && (left >= 0.3 && left + width <= 0.7))) {
-//                eventDTO.setDetail("Error en bounding box.");
+            } else if (!((top >= 0.2 && top <= 0.5) && (left >= 0.25 && left <= 0.5)
+                    && (height >= 0.3 && height <= 0.6) && (width >= 0.2 && width <= 0.5))) {
+                eventDTO.setDetail("Error en bounding box.");
             } else if (brightness >= 80F) {
                 result = true;
             } else if (brightness <= 50F || sharpness <= 17F) {
@@ -191,12 +187,11 @@ public class ImageService {
     public boolean uploadAndValidateSourceAndTarget(String id, ByteBuffer sourceByteBuffer, ByteBuffer targetByteBuffer2, EventDTO eventDTO) {
         float similarityThreshold = 90F;
         float minConfidence = 55F;
-        String bucketName = "pruebas-id4face";
 
-        uploadSourceToS3(id, bucketName, sourceByteBuffer);
-        uploadImageToS3(id, bucketName, 1, targetByteBuffer2);
+        uploadSourceToS3(id, BUCKET_NAME, sourceByteBuffer);
+        uploadImageToS3(id, BUCKET_NAME, 1, targetByteBuffer2);
 
-        return validateTwoImages(id, bucketName, targetByteBuffer2, eventDTO, similarityThreshold, minConfidence);
+        return validateTwoImages(id, BUCKET_NAME, targetByteBuffer2, eventDTO, similarityThreshold, minConfidence);
 
     }
 
@@ -236,5 +231,23 @@ public class ImageService {
         }
         log.debug("Validation with detail : {}", eventDTO.getDetail());
         return flag;
+    }
+
+    public boolean referenceExistsInS3(String id) {
+        try {
+            Image reference = Image.builder()
+                    .s3Object(S3Object.builder().name(id + REFERENCE).bucket(BUCKET_NAME).build())
+                    .build();
+            DetectLabelsRequest detectLabelsRequest = DetectLabelsRequest.builder()
+                    .minConfidence(70F)
+                    .image(reference)
+                    .build();
+            RekognitionAsyncClient client = RekognitionAsyncClient.builder()
+                    .region(Region.US_EAST_2).build();
+            client.detectLabels(detectLabelsRequest).get().labels();
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

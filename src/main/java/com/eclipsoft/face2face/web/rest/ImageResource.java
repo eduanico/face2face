@@ -3,6 +3,7 @@ package com.eclipsoft.face2face.web.rest;
 import com.eclipsoft.face2face.Integration.CheckIdClient;
 import com.eclipsoft.face2face.domain.enumeration.EventType;
 import com.eclipsoft.face2face.service.AgentService;
+import com.eclipsoft.face2face.service.BlackListService;
 import com.eclipsoft.face2face.service.EventService;
 import com.eclipsoft.face2face.service.ImageService;
 import com.eclipsoft.face2face.service.dto.EventDTO;
@@ -29,6 +30,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+
 @RestController
 @RequestMapping("/api")
 public class ImageResource {
@@ -43,12 +45,19 @@ public class ImageResource {
 
     private final CheckIdClient checkIdClient;
 
+    private final BlackListService blackListService;
+
+    private static final String IS_SUCCESSFUL = "isSuccessful";
+    private static final String DETAIL = "detail";
+
+
     public ImageResource(ImageService imageService, AgentService agentService,
-                         EventService eventService, CheckIdClient checkIdClient) {
+                         EventService eventService, CheckIdClient checkIdClient, BlackListService blackListService) {
         this.imageService = imageService;
         this.agentService = agentService;
         this.eventService = eventService;
         this.checkIdClient = checkIdClient;
+        this.blackListService = blackListService;
     }
 
 
@@ -56,47 +65,61 @@ public class ImageResource {
      * Validates an array of images with an id for reference
      */
     @PostMapping(value = "/validate-face")
-    public Mono<ResponseEntity<Map<String, Object>>> validateEvidences(@RequestPart("images") Flux<FilePart> images
-            , @RequestPart("id") String id, Authentication authentication)
-            throws ExecutionException, InterruptedException {
-        EventDTO eventDTO = new EventDTO();
-        AtomicInteger count = new AtomicInteger(1);
-        AtomicBoolean flag = new AtomicBoolean();
-        Map<String, Object> response = new HashMap<>();
+    public Mono<ResponseEntity<Map<String, Object>>> validateEvidence(@RequestPart("images") Flux<FilePart> images
+            , @RequestPart("id") String id, Authentication authentication) {
+        return blackListService.existInBlackList(id)
+                .flatMap(exists -> {
+                    Map<String, Object> response = new HashMap<>();
+                    if (Boolean.TRUE.equals(exists)) {
+                        response.put(IS_SUCCESSFUL, false);
+                        response.put(DETAIL, "Número máximo de intentos excedidos por hoy");
+                        return Mono.just(new ResponseEntity<>(response, HttpStatus.OK));
+                    }
 
-        agentService.findByName(authentication.getName()).subscribe(
-                agentDTO -> {
-                    eventDTO.setAgent(agentDTO);
-                    eventDTO.setIdentification(id);
-                    eventDTO.setValidationDate(Instant.now());
+                    EventDTO eventDTO = new EventDTO();
+                    AtomicInteger count = new AtomicInteger(1);
+                    AtomicBoolean flag = new AtomicBoolean();
+
+                    agentService.findByName(authentication.getName()).subscribe(
+                            agentDTO -> {
+                                eventDTO.setAgent(agentDTO);
+                                eventDTO.setIdentification(id);
+                                eventDTO.setValidationDate(Instant.now());
+                            });
+
+                    List<FilePart> list;
+                    try {
+                        list = images.collectList().toFuture().get();
+
+                        for (FilePart filePart : list) {
+                            List<DataBuffer> dblist;
+                            dblist = filePart.content().collectList().toFuture().get();
+
+                            for (DataBuffer d : dblist) {
+                                flag.set(imageService.uploadAndValidateImages(id, d.asByteBuffer(), count.get(), list.size(), eventDTO));
+                                count.getAndIncrement();
+                                if (!flag.get()) {
+                                    eventDTO.setEventType(EventType.VALIDATION_FAILED);
+                                    eventDTO.setSuccessful(false);
+                                    eventService.save(eventDTO).subscribe();
+                                    response.put(IS_SUCCESSFUL, false);
+                                    response.put(DETAIL, eventDTO.getDetail());
+                                    log.info("VALIDATION FAILED FOR ID: {}", id);
+                                    return Mono.just(new ResponseEntity<>(response, HttpStatus.OK));
+                                }
+                            }
+                        }
+                        response.put(IS_SUCCESSFUL, true);
+                        response.put(DETAIL, eventDTO.getDetail());
+                        eventDTO.setEventType(EventType.VALIDATION_SUCCESS);
+                        eventDTO.setSuccessful(true);
+                        eventService.save(eventDTO).subscribe();
+                        log.info("VALIDATION SUCCESS FOR ID: {}", id);
+                        return Mono.just(new ResponseEntity<>(response, HttpStatus.OK));
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
                 });
-
-        List<FilePart> list = images.collectList().toFuture().get();
-
-        for (FilePart filePart : list) {
-            List<DataBuffer> dblist = filePart.content().collectList().toFuture().get();
-
-            for (DataBuffer d : dblist) {
-                flag.set(imageService.uploadAndValidateImages(id, d.asByteBuffer(), count.get(), list.size(), eventDTO));
-                count.getAndIncrement();
-                if (!flag.get()) {
-                    eventDTO.setEventType(EventType.VALIDATION_FAILED);
-                    eventDTO.setSuccessful(false);
-                    eventService.save(eventDTO).subscribe();
-                    response.put("isSuccessful", false);
-                    response.put("detail", eventDTO.getDetail());
-                    log.info("VALIDATION FAILED FOR ID: {}", id);
-                    return Mono.just(new ResponseEntity<>(response, HttpStatus.OK));
-                }
-            }
-        }
-        response.put("isSuccessful", true);
-        response.put("detail", eventDTO.getDetail());
-        eventDTO.setEventType(EventType.VALIDATION_SUCCESS);
-        eventDTO.setSuccessful(true);
-        eventService.save(eventDTO).subscribe();
-        log.info("VALIDATION SUCCESS FOR ID: {}", id);
-        return Mono.just(new ResponseEntity<>(response, HttpStatus.OK));
     }
 
     /**
@@ -148,15 +171,31 @@ public class ImageResource {
      * Fetch the image in base64 from RCE
      */
     @PostMapping(value = "/check-id", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public Mono<ResponseEntity<Object>> uploadImage(@Valid @RequestBody RequestVM referenceModel) {
+    public Mono<ResponseEntity<Map<String, Object>>> uploadImage(@Valid @RequestBody RequestVM referenceModel) {
+        String id = referenceModel.getId();
+        return blackListService.existInBlackList(id).flatMap(flag -> {
+            Map<String, Object> response = new HashMap<>();
+            if (Boolean.TRUE.equals(flag)) {
+                response.put(IS_SUCCESSFUL, false);
+                response.put(DETAIL, "Número máximo de intentos excedidos por hoy");
+                return Mono.just(new ResponseEntity<>(response, HttpStatus.OK));
 
-        return checkIdClient.findPerson(referenceModel.getId(), referenceModel.getDactilar())
-                .flatMap(person -> {
-                    imageService.uploadBase64ToS3(referenceModel.getId(),
-                            (String) person.get("fotografia"), "pruebas-id4face");
-                    return Mono.just(ResponseEntity.ok().build());
-                })
-                .doOnError(throwable -> Mono.just(ResponseEntity.badRequest().body(throwable.getMessage())));
+            } else if (imageService.referenceExistsInS3(id)) {
+                response.put(IS_SUCCESSFUL, true);
+                response.put(DETAIL, "Ok");
+                return Mono.just(new ResponseEntity<>(response, HttpStatus.OK));
+            }
+
+            return checkIdClient.findPerson(referenceModel.getId(), referenceModel.getDactilar())
+                    .flatMap(person -> {
+                        imageService.uploadBase64ToS3(referenceModel.getId(),
+                                (String) person.get("fotografia"), "pruebas-id4face");
+                        response.put(IS_SUCCESSFUL, true);
+                        response.put(DETAIL, "Ok");
+                        return Mono.just(new ResponseEntity<>(response, HttpStatus.OK));
+                    })
+                    .doOnError(throwable -> Mono.just(ResponseEntity.badRequest().body(throwable.getMessage())));
+        });
     }
 
     /**
@@ -198,14 +237,14 @@ public class ImageResource {
             eventDTO.setEventType(EventType.VALIDATION_FAILED);
             eventDTO.setSuccessful(false);
             eventService.save(eventDTO).subscribe();
-            response.put("isSuccessful", false);
-            response.put("detail", eventDTO.getDetail());
+            response.put(IS_SUCCESSFUL, false);
+            response.put(DETAIL, eventDTO.getDetail());
             log.info("VALIDATION FAILED FOR ID: {}", id);
             return Mono.just(new ResponseEntity<>(response, HttpStatus.OK));
         }
 
-        response.put("isSuccessful", true);
-        response.put("detail", eventDTO.getDetail());
+        response.put(IS_SUCCESSFUL, true);
+        response.put(DETAIL, eventDTO.getDetail());
         eventDTO.setEventType(EventType.VALIDATION_SUCCESS);
         eventDTO.setSuccessful(true);
         eventService.save(eventDTO).

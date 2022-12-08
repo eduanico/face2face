@@ -76,7 +76,7 @@ public class ExceptionTranslator implements ProblemHandling, SecurityAdviceTrait
             builder
                     .with(VIOLATIONS_KEY, ((ConstraintViolationProblem) problem).getViolations())
                     .with(MESSAGE_KEY, ErrorConstants.ERR_VALIDATION);
-        } else if (problem.getDetail().equals("CheckId received a bad request")) {
+        } else if (problem.getDetail() == "CheckId received a bad request") {
             builder.withCause(((DefaultProblem) problem).getCause()).withDetail(problem.getDetail()).withInstance(problem.getInstance());
             problem.getParameters().forEach(builder::with);
             builder.withStatus(Status.BAD_REQUEST).withTitle("CheckId received a bad request")
