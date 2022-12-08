@@ -75,7 +75,7 @@ spring:
         enabled: true
 
 server:
-  port: 8080
+  port: 8082
 
 # ===================================================================
 # JHipster specific properties
@@ -89,9 +89,9 @@ jhipster:
   # CORS is only enabled by default with the "dev" profile
   cors:
     # Allow Ionic for JHipster by default (* no longer allowed in Spring Boot 2.4+)
-    allowed-origins: 'http://localhost:8100,https://localhost:8100,http://localhost:9000,https://localhost:9000'
+    allowed-origins: 'http://localhost:3010, http://192.168.110.83:5500,http://localhost:5500, http://localhost:8082,http://localhost:8100,https://localhost:8100,http://localhost:9000,https://localhost:9000, http://192.168.112.64:3010/, http://192.168.110.83:9000'
     # Enable CORS when running in GitHub Codespaces
-    allowed-origin-patterns: 'https://*.githubpreview.dev'
+    #    allowed-origin-patterns: 'http://192.168.112.64:*'
     allowed-methods: '*'
     allowed-headers: '*'
     exposed-headers: 'Authorization,Link,X-Total-Count,X-${jhipster.clientApp.name}-alert,X-${jhipster.clientApp.name}-error,X-${jhipster.clientApp.name}-params'
@@ -123,4 +123,10 @@ jhipster:
 # https://www.jhipster.tech/common-application-properties/
 # ===================================================================
 
-# application:
+application:
+  integration:
+    check-id:
+      base-url: "https://checkid.eclipsoft.com:8012"
+      username: "hcheck"
+      password: "WCwp#B4!KuAgaE"
+      timeout-in-seconds: 30

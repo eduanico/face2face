@@ -50,6 +50,10 @@ public class AgentService {
         return agentRepository.save(agentMapper.toEntity(agentDTO)).map(agentMapper::toDto);
     }
 
+    public Mono<AgentDTO> findByName(String name) {
+        return agentRepository.findByName(name).map(agentMapper::toDto);
+    }
+
     /**
      * Partially update a agent.
      *

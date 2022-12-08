@@ -4,16 +4,14 @@ import com.eclipsoft.face2face.domain.Agent;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
 import org.springframework.stereotype.Repository;
+import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 
 /**
  * Spring Data MongoDB reactive repository for the Agent entity.
  */
 @SuppressWarnings("unused")
 @Repository
-public interface AgentRepository extends ReactiveMongoRepository<Agent, String> {
+public interface ImageRepository extends ReactiveMongoRepository<MultipartFile, String> {
     Flux<Agent> findAllBy(Pageable pageable);
-
-    Mono<Agent> findByName(String name);
 }
